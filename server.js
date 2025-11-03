@@ -1,4 +1,3 @@
-// server.js
 import express from "express";
 import cors from "cors";
 import { MongoClient, ObjectId } from "mongodb";
@@ -14,54 +13,9 @@ app.use(express.json());
 const client = new MongoClient(process.env.MONGO_URI);
 let db;
 
-async function conectarMongo() {
-  try {
-    await client.connect();
-    db = client.db("tinbr"); // 👈 nome do seu banco
-    console.log("✅ Conectado ao MongoDB Atlas");
-  } catch (err) {
-    console.error("❌ Erro ao conectar no MongoDB:", err);
-  }
-}
-async function iniciarServidor() {
-  try {
-    await client.connect();
-    db = client.db("tinbr");
-    console.log("✅ Conectado ao MongoDB Atlas");
-
-    // 🔹 Criação automática das rotas para suas collections
-    [
-      "clientes",
-      "mercado",
-      "operacoes",
-      "proprietarios",
-      "referencia",
-      "tks",
-      "users",
-      "players",
-    ].forEach((nome) => criarRota(nome));
-
-    // 🔹 Inicia o servidor só depois da conexão
-    const PORT = process.env.PORT || 3000;
-    app.listen(PORT, () => console.log(`🚀 Servidor rodando na porta ${PORT}`));
-  } catch (err) {
-    console.error("❌ Erro ao conectar no MongoDB:", err);
-  }
-}
-
-iniciarServidor();
-
-
-// Rota raiz
-app.get("/", (req, res) => {
-  res.send("API MongoDB funcionando! 🚀");
-});
-
-// 🔹 Função para criar rotas genéricas
-function criarRota(nomeCollection) {
+async function criarRota(nomeCollection) {
   const collection = db.collection(nomeCollection);
 
-  // GET - listar todos
   app.get(`/${nomeCollection}`, async (req, res) => {
     try {
       const dados = await collection.find().toArray();
@@ -71,7 +25,6 @@ function criarRota(nomeCollection) {
     }
   });
 
-  // POST - inserir novo
   app.post(`/${nomeCollection}`, async (req, res) => {
     try {
       const result = await collection.insertOne(req.body);
@@ -81,7 +34,6 @@ function criarRota(nomeCollection) {
     }
   });
 
-  // PUT - atualizar por ID
   app.put(`/${nomeCollection}/:id`, async (req, res) => {
     try {
       const result = await collection.updateOne(
@@ -94,7 +46,6 @@ function criarRota(nomeCollection) {
     }
   });
 
-  // DELETE - excluir por ID
   app.delete(`/${nomeCollection}/:id`, async (req, res) => {
     try {
       const result = await collection.deleteOne({
@@ -107,18 +58,35 @@ function criarRota(nomeCollection) {
   });
 }
 
-// 🔹 Criação automática das rotas para suas collections
-[
-  "clientes",
-  "mercado",
-  "operacoes",
-  "proprietarios",
-  "referencia",
-  "tks",
-  "users",
-  "players",
-].forEach((nome) => criarRota(nome));
+async function iniciarServidor() {
+  try {
+    await client.connect();
+    db = client.db("tinbr");
+    console.log("✅ Conectado ao MongoDB Atlas");
 
-// Porta automática do Render
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`🚀 Servidor rodando na porta ${PORT}`));
+    // 🔹 Só cria as rotas DEPOIS da conexão
+    [
+      "clientes",
+      "mercado",
+      "operacoes",
+      "proprietarios",
+      "referencia",
+      "tks",
+      "users",
+      "players",
+    ].forEach((nome) => criarRota(nome));
+
+    app.get("/", (req, res) => {
+      res.send("API MongoDB funcionando! 🚀");
+    });
+
+    const PORT = process.env.PORT || 3000;
+    app.listen(PORT, () =>
+      console.log(`🚀 Servidor rodando na porta ${PORT}`)
+    );
+  } catch (err) {
+    console.error("❌ Erro ao conectar no MongoDB:", err);
+  }
+}
+
+iniciarServidor();
