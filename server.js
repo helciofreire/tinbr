@@ -23,7 +23,34 @@ async function conectarMongo() {
     console.error("❌ Erro ao conectar no MongoDB:", err);
   }
 }
-conectarMongo();
+async function iniciarServidor() {
+  try {
+    await client.connect();
+    db = client.db("tinbr");
+    console.log("✅ Conectado ao MongoDB Atlas");
+
+    // 🔹 Criação automática das rotas para suas collections
+    [
+      "clientes",
+      "mercado",
+      "operacoes",
+      "proprietarios",
+      "referencia",
+      "tks",
+      "users",
+      "players",
+    ].forEach((nome) => criarRota(nome));
+
+    // 🔹 Inicia o servidor só depois da conexão
+    const PORT = process.env.PORT || 3000;
+    app.listen(PORT, () => console.log(`🚀 Servidor rodando na porta ${PORT}`));
+  } catch (err) {
+    console.error("❌ Erro ao conectar no MongoDB:", err);
+  }
+}
+
+iniciarServidor();
+
 
 // Rota raiz
 app.get("/", (req, res) => {
