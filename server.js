@@ -1,3 +1,4 @@
+// ✅ server.js - versão ajustada
 import express from "express";
 import cors from "cors";
 import { MongoClient, ObjectId } from "mongodb";
@@ -7,33 +8,60 @@ dotenv.config();
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "50mb" })); // permite JSON grande (importes grandes)
 
-// Conexão MongoDB
+// 🔹 Conexão MongoDB
 const client = new MongoClient(process.env.MONGO_URI);
 let db;
 
+// 🔹 Função genérica para criar rotas CRUD
 async function criarRota(nomeCollection) {
   const collection = db.collection(nomeCollection);
 
+  // GET - listar todos
   app.get(`/${nomeCollection}`, async (req, res) => {
     try {
       const dados = await collection.find().toArray();
       res.json(dados);
     } catch (err) {
+      console.error(`❌ Erro ao buscar ${nomeCollection}:`, err);
       res.status(500).json({ erro: "Erro ao buscar dados" });
     }
   });
 
+  // POST - inserir (1 ou vários)
   app.post(`/${nomeCollection}`, async (req, res) => {
     try {
-      const result = await collection.insertOne(req.body);
-      res.json(result);
-    } catch (err) {
-      res.status(500).json({ erro: "Erro ao inserir documento" });
+      const dados = req.body;
+
+      if (!dados || (Array.isArray(dados) && dados.length === 0)) {
+        return res.status(400).json({ erro: "Nenhum dado recebido." });
+      }
+
+      if (Array.isArray(dados)) {
+        // 🔹 Inserção em massa
+        const result = await collection.insertMany(dados);
+        res.status(201).json({
+          sucesso: true,
+          mensagem: `✅ ${result.insertedCount} registros inseridos em ${nomeCollection}`,
+          ids: Object.values(result.insertedIds)
+        });
+      } else {
+        // 🔹 Inserção única
+        const result = await collection.insertOne(dados);
+        res.status(201).json({
+          sucesso: true,
+          mensagem: `✅ 1 registro inserido em ${nomeCollection}`,
+          id: result.insertedId
+        });
+      }
+    } catch (erro) {
+      console.error(`❌ Erro ao inserir em ${nomeCollection}:`, erro);
+      res.status(500).json({ sucesso: false, erro: erro.message });
     }
   });
 
+  // PUT - atualizar por ID
   app.put(`/${nomeCollection}/:id`, async (req, res) => {
     try {
       const result = await collection.updateOne(
@@ -46,6 +74,7 @@ async function criarRota(nomeCollection) {
     }
   });
 
+  // DELETE - excluir por ID
   app.delete(`/${nomeCollection}/:id`, async (req, res) => {
     try {
       const result = await collection.deleteOne({
@@ -58,13 +87,15 @@ async function criarRota(nomeCollection) {
   });
 }
 
+// 🔹 Inicializa servidor
 async function iniciarServidor() {
   try {
+    console.log("🔌 Conectando ao MongoDB Atlas...");
     await client.connect();
     db = client.db("tinbr");
-    console.log("✅ Conectado ao MongoDB Atlas");
+    console.log("✅ Conectado ao MongoDB Atlas!");
 
-    // 🔹 Só cria as rotas DEPOIS da conexão
+    // Cria as rotas
     [
       "clientes",
       "mercado",
@@ -77,15 +108,16 @@ async function iniciarServidor() {
     ].forEach((nome) => criarRota(nome));
 
     app.get("/", (req, res) => {
-      res.send("API MongoDB funcionando! 🚀");
+      res.send("🚀 API MongoDB funcionando perfeitamente!");
     });
 
     const PORT = process.env.PORT || 3000;
-    app.listen(PORT, () =>
-      console.log(`🚀 Servidor rodando na porta ${PORT}`)
-    );
+    app.listen(PORT, () => {
+      console.log(`✅ Servidor rodando na porta ${PORT}`);
+    });
   } catch (err) {
     console.error("❌ Erro ao conectar no MongoDB:", err);
+    process.exit(1);
   }
 }
 
