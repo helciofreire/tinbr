@@ -24,13 +24,18 @@ function normalizarCampos(obj) {
     "Em": "atualizadoEm",
     "_eu ia": "_id"
   };
+
   const novo = {};
   for (const chave in obj) {
-    const limpa = mapa[chave] || chave.trim();
-    novo[limpa] = obj[chave];
+    // remove espaços e acentos de chaves inesperadas
+    const chaveLimpa = chave.normalize("NFD").replace(/[\u0300-\u036f]/g, ""); 
+    const final = mapa[chave] || chaveLimpa.trim();
+    novo[final] = obj[chave];
   }
+
   return novo;
 }
+
 
 // 🔹 Função genérica para criar rotas CRUD
 async function criarRota(nomeCollection) {
