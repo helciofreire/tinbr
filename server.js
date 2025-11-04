@@ -135,7 +135,7 @@ async function iniciarServidor() {
 // 🔹 Rota para verificar a versão do servidor
 app.get("/version", (req, res) => {
   res.json({
-    versao: "1.0.3-normalizacao",
+    versao: "1.0.4-removendo-subrepo",
     atualizadoEm: new Date().toISOString(),
   });
 });
