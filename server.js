@@ -14,6 +14,24 @@ app.use(express.json({ limit: "50mb" })); // permite JSON grande (importes grand
 const client = new MongoClient(process.env.MONGO_URI);
 let db;
 
+function normalizarCampos(obj) {
+  const mapa = {
+    "e-mail": "email",
+    "função": "funcao",
+    "responsável": "responsavel",
+    "código": "codigo",
+    "nível": "nivel",
+    "Em": "atualizadoEm",
+    "_eu ia": "_id"
+  };
+  const novo = {};
+  for (const chave in obj) {
+    const limpa = mapa[chave] || chave.trim();
+    novo[limpa] = obj[chave];
+  }
+  return novo;
+}
+
 // 🔹 Função genérica para criar rotas CRUD
 async function criarRota(nomeCollection) {
   const collection = db.collection(nomeCollection);
@@ -29,55 +47,36 @@ async function criarRota(nomeCollection) {
     }
   });
 
-  // POST - inserir (1 ou vários)
-app.post(`/users`, async (req, res) => {
+// POST - inserir (1 ou vários)
+app.post(`/${nomeCollection}`, async (req, res) => {
   try {
-    const dados = req.body;
+    let dados = req.body;
 
     if (!dados || (Array.isArray(dados) && dados.length === 0)) {
       return res.status(400).json({ erro: "Nenhum dado recebido." });
     }
 
-    // 🔹 Normaliza o corpo (corrige acentos, espaços e nomes errados)
-    const normalizarCampos = (u) => ({
-      _id: u._id,
-      nome: u.nome,
-      documento: u.documento,
-      senha: u.senha,
-      email: u.email || u["e-mail"] || "",
-      funcao: u.funcao || u["função"] || "",
-      fone1: u.fone1,
-      fone2: u.fone2,
-      redes: u.redes,
-      obs: u.obs,
-      responsavel: u.responsavel || u["responsável"] || "",
-      codigo: u.codigo || u["código"] || "",
-      nivel: u.nivel || u["nível"] || 0,
-      criadoEm: u.criadoEm ? new Date(u.criadoEm) : new Date(),
-      atualizadoEm: u.atualizadoEm || u.Em ? new Date(u.atualizadoEm || u.Em) : new Date(),
-    });
-
-    let limpos;
-
     if (Array.isArray(dados)) {
-      limpos = dados.map(normalizarCampos);
-      const result = await db.collection("users").insertMany(limpos);
+      // 🔹 Inserção em massa
+      const dadosLimpos = dados.map(normalizarCampos);
+      const result = await collection.insertMany(dadosLimpos);
       res.status(201).json({
         sucesso: true,
-        mensagem: `✅ ${result.insertedCount} registros inseridos em users`,
-        ids: Object.values(result.insertedIds),
+        mensagem: `✅ ${result.insertedCount} registros inseridos em ${nomeCollection}`,
+        ids: Object.values(result.insertedIds)
       });
     } else {
-      limpos = normalizarCampos(dados);
-      const result = await db.collection("users").insertOne(limpos);
+      // 🔹 Inserção única
+      const dadoLimpo = normalizarCampos(dados);
+      const result = await collection.insertOne(dadoLimpo);
       res.status(201).json({
         sucesso: true,
-        mensagem: `✅ 1 registro inserido em users`,
-        id: result.insertedId,
+        mensagem: `✅ 1 registro inserido em ${nomeCollection}`,
+        id: result.insertedId
       });
     }
   } catch (erro) {
-    console.error(`❌ Erro ao inserir em users:`, erro);
+    console.error(`❌ Erro ao inserir em ${nomeCollection}:`, erro);
     res.status(500).json({ sucesso: false, erro: erro.message });
   }
 });
