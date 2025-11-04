@@ -137,13 +137,13 @@ async function iniciarServidor() {
       res.send("🚀 API MongoDB funcionando perfeitamente!");
     });
 
-// 🔹 Rota para verificar a versão do servidor
 app.get("/version", (req, res) => {
   res.json({
-    versao: "1.0.3-normalizacao",
+    versao: "1.0.5-normalizacao",
     atualizadoEm: new Date().toISOString(),
   });
 });
+
 
 
     const PORT = process.env.PORT || 3000;
