@@ -1,4 +1,4 @@
-import express from "express";
+import express from "express"; 
 import cors from "cors";
 import { MongoClient } from "mongodb";
 import dotenv from "dotenv";
@@ -76,7 +76,7 @@ async function criarRota(nomeCollection) {
     }
   });
 
-  // 🔹 BUSCAR POR ID: /users/:id
+  // 🔹 BUSCAR POR ID
   app.get(`/${nomeCollection}/:id`, async (req, res) => {
     try {
       const id = String(req.params.id).trim();
@@ -141,7 +141,6 @@ async function criarRota(nomeCollection) {
 
 }
 
-
 async function iniciarServidor() {
   try {
     console.log("🔌 Conectando ao MongoDB...");
@@ -163,6 +162,11 @@ async function iniciarServidor() {
     for (const nome of colecoes) {
       await criarRota(nome);
     }
+
+    // ✅ **NOVA ROTA PARA MANTER O RENDER ACORDADO**
+    app.get("/health", (req, res) => {
+      res.status(200).send("OK");
+    });
 
     app.get("/", (req, res) => res.send("🚀 API MongoDB OK!"));
 
