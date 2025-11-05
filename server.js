@@ -1,4 +1,3 @@
-// ✅ server.js corrigido e simplificado
 import express from "express";
 import cors from "cors";
 import { MongoClient } from "mongodb";
@@ -13,92 +12,142 @@ app.use(express.json({ limit: "50mb" }));
 const client = new MongoClient(process.env.MONGO_URI);
 let db;
 
-function normalizarCampos(obj) {
-  const mapa = {
+// ✅ Remove acentos, renomeia campos e remove espaços do cliente_id
+function normalizar(obj) {
+  const map = {
     "e-mail": "email",
     "função": "funcao",
     "responsável": "responsavel",
     "código": "codigo",
-    "nível": "nivel",
-    "Em": "atualizadoEm",
+    "nível": "nivel"
   };
 
   const novo = {};
+
   for (const chave in obj) {
-    const chaveLimpa = chave.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-    const final = mapa[chave] || chaveLimpa.trim();
+    const chaveSemAcento = chave.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    const chaveFinal = map[chave] || chaveSemAcento.trim();
 
     let valor = obj[chave];
 
-    // Remove espaços extras
     if (typeof valor === "string") valor = valor.trim();
+    if (chaveFinal === "cliente_id") valor = String(valor).trim();
 
-    // Garante cliente_id sem espaços
-    if (final === "cliente_id") valor = String(valor).trim();
-
-    novo[final] = valor;
+    novo[chaveFinal] = valor;
   }
+
   return novo;
 }
 
+// ✅ Cria rotas para cada collection (inclusive users)
 async function criarRota(nomeCollection) {
+
   const collection = db.collection(nomeCollection);
 
-  // 🔹 POST - inserir
-  app.post(`/${nomeCollection}`, async (req, res) => {
+  // 🔹 LISTAR /users + filtros (cliente e nível)
+  app.get(`/${nomeCollection}`, async (req, res) => {
     try {
-      let dados = req.body;
-      if (!dados) return res.status(400).json({ erro: "Nenhum dado recebido." });
+      const { cliente_id, nivel_gt, limit, sort } = req.query;
 
-      if (Array.isArray(dados)) {
-        const dadosLimpos = dados.map(normalizarCampos);
-        const result = await collection.insertMany(dadosLimpos);
-        return res.status(201).json({ sucesso: true, inseridos: result.insertedCount });
+      const query = {};
+
+      if (cliente_id) query.cliente_id = String(cliente_id).trim();
+      if (nivel_gt) query.nivel = { $gt: Number(nivel_gt) };
+
+      let cursor = collection.find(query);
+
+      if (sort) {
+        const partes = sort.split(",");
+        const ordenacao = {};
+        for (let i = 0; i < partes.length; i += 2) {
+          ordenacao[partes[i]] = partes[i + 1] === "asc" ? 1 : -1;
+        }
+        cursor = cursor.sort(ordenacao);
       }
 
-      const dadoLimpo = normalizarCampos(dados);
-      const result = await collection.insertOne(dadoLimpo);
-      res.status(201).json({ sucesso: true, id: result.insertedId });
+      const max = limit ? Number(limit) : 1000;
+      const dados = await cursor.limit(max).toArray();
+
+      res.json(dados);
 
     } catch (erro) {
-      console.error(`❌ Erro ao inserir em ${nomeCollection}:`, erro);
+      console.error("❌ Erro ao listar registros:", erro);
+      res.status(500).json({ erro: "Falha ao buscar dados." });
+    }
+  });
+
+  // 🔹 BUSCAR POR ID: /users/:id
+  app.get(`/${nomeCollection}/:id`, async (req, res) => {
+    try {
+      const id = String(req.params.id).trim();
+      const registro = await collection.findOne({ _id: id });
+
+      if (!registro) return res.status(404).json({ erro: "Não encontrado" });
+
+      res.json(registro);
+
+    } catch (erro) {
+      console.error("❌ Erro ao buscar por ID:", erro);
+      res.status(500).json({ erro: "Erro ao buscar registro." });
+    }
+  });
+
+  // 🔹 INSERIR
+  app.post(`/${nomeCollection}`, async (req, res) => {
+    try {
+      const doc = normalizar(req.body);
+      const result = await collection.insertOne(doc);
+
+      res.status(201).json({
+        sucesso: true,
+        id: result.insertedId
+      });
+
+    } catch (erro) {
+      console.error("❌ Erro ao inserir registro:", erro);
       res.status(500).json({ erro: erro.message });
     }
   });
 
-  // 🔹 PUT - atualizar
+  // 🔹 ATUALIZAR
   app.put(`/${nomeCollection}/:id`, async (req, res) => {
     try {
-      const result = await collection.updateOne(
-        { _id: req.params.id },
-        { $set: req.body }
-      );
-      res.json(result);
+      const id = String(req.params.id).trim();
+      const dados = normalizar(req.body);
+
+      const result = await collection.updateOne({ _id: id }, { $set: dados });
+
+      res.json({ sucesso: result.modifiedCount === 1 });
+
     } catch (erro) {
-      console.error("Erro ao atualizar:", erro);
-      res.status(500).json({ erro: "Erro ao atualizar registro" });
+      console.error("❌ Erro ao atualizar registro:", erro);
+      res.status(500).json({ erro: erro.message });
     }
   });
 
-  // 🔹 DELETE - excluir
+  // 🔹 EXCLUIR
   app.delete(`/${nomeCollection}/:id`, async (req, res) => {
     try {
-      const result = await collection.deleteOne({ _id: req.params.id });
-      if (result.deletedCount === 1) res.json({ sucesso: true });
-      else res.status(404).json({ erro: "Registro não encontrado" });
+      const id = String(req.params.id).trim();
+      const result = await collection.deleteOne({ _id: id });
+
+      res.json({ sucesso: result.deletedCount === 1 });
+
     } catch (erro) {
-      console.error("Erro ao excluir:", erro);
-      res.status(500).json({ erro: "Erro ao excluir registro" });
+      console.error("❌ Erro ao excluir registro:", erro);
+      res.status(500).json({ erro: erro.message });
     }
   });
+
 }
+
 
 async function iniciarServidor() {
   try {
     console.log("🔌 Conectando ao MongoDB...");
     await client.connect();
     db = client.db("tinbr");
-    console.log("✅ Conectado!");
+    console.log("✅ Conectado ao MongoDB!");
 
     const colecoes = [
       "clientes",
@@ -111,45 +160,17 @@ async function iniciarServidor() {
       "players"
     ];
 
-    for (const nome of colecoes) await criarRota(nome);
+    for (const nome of colecoes) {
+      await criarRota(nome);
+    }
 
-    // ✅ GET /users correto (sempre lê da coleção users)
-    app.get("/users", async (req, res) => {
-      try {
-        const { cliente_id, nivel_gt, limit, sort } = req.query;
-        const users = db.collection("users");
-
-        const filtro = {};
-        if (cliente_id) filtro.cliente_id = String(cliente_id).trim();
-        if (nivel_gt) filtro.nivel = { $gt: Number(nivel_gt) };
-
-        let cursor = users.find(filtro);
-
-        if (sort) {
-          const ordenacao = {};
-          const campos = sort.split(',');
-          for (let i = 0; i < campos.length; i += 2) {
-            ordenacao[campos[i]] = campos[i + 1] === "asc" ? 1 : -1;
-          }
-          cursor = cursor.sort(ordenacao);
-        }
-
-        const resultado = await cursor.limit(Number(limit) || 1000).toArray();
-        res.json(resultado);
-
-      } catch (erro) {
-        console.error("Erro GET /users:", erro);
-        res.status(500).json({ erro: "Erro ao buscar usuários." });
-      }
-    });
-
-    app.get("/", (_, res) => res.send("🚀 API OK!"));
+    app.get("/", (req, res) => res.send("🚀 API MongoDB OK!"));
 
     const PORT = process.env.PORT || 3000;
     app.listen(PORT, () => console.log(`✅ Servidor rodando na porta ${PORT}`));
 
   } catch (erro) {
-    console.error("❌ Erro ao iniciar:", erro);
+    console.error("❌ Falha ao iniciar servidor:", erro);
     process.exit(1);
   }
 }
