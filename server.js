@@ -165,8 +165,14 @@ async function iniciarServidor() {
 
     // ✅ **NOVA ROTA PARA MANTER O RENDER ACORDADO**
     app.get("/health", (req, res) => {
-      res.status(200).send("OK");
-    });
+  const conectado = client && client.topology && client.topology.isConnected();
+  res.status(200).json({
+    status: "UP",
+    mongo: conectado ? "connected" : "disconnected",
+    timestamp: new Date().toISOString(),
+  });
+});
+
 
     app.get("/", (req, res) => res.send("🚀 API MongoDB OK!"));
 
