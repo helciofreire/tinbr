@@ -27,10 +27,24 @@ function normalizarCampos(obj) {
   for (const chave in obj) {
     const chaveLimpa = chave.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
     const final = mapa[chave] || chaveLimpa.trim();
-    novo[final] = obj[chave];
+
+    let valor = obj[chave];
+
+    // 🔹 Se for string, remove espaços extras
+    if (typeof valor === "string") {
+      valor = valor.trim();
+    }
+
+    // 🔹 Garante que cliente_id não tenha espaços
+    if (final === "cliente_id") {
+      valor = String(valor).trim();
+    }
+
+    novo[final] = valor;
   }
   return novo;
 }
+
 
 async function criarRota(nomeCollection) {
   const collection = db.collection(nomeCollection);
