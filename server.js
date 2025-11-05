@@ -36,15 +36,36 @@ async function criarRota(nomeCollection) {
   const collection = db.collection(nomeCollection);
 
   // GET - listar todos
-  app.get(`/${nomeCollection}`, async (req, res) => {
-    try {
-      const dados = await collection.find().toArray();
-      res.json(dados);
-    } catch (err) {
-      console.error(`❌ Erro ao buscar ${nomeCollection}:`, err);
-      res.status(500).json({ erro: "Erro ao buscar dados" });
+  app.get('/users', async (req, res) => {
+  try {
+    const { cliente_id, nivel_gt, limit, sort } = req.query;
+    const query = {};
+
+    if (cliente_id) query.cliente_id = cliente_id;
+    if (nivel_gt) query.nivel = { $gt: Number(nivel_gt) };
+
+    let cursor = collection.find(query);
+
+    if (sort) {
+      // Exemplo simples: "nivel,asc,nome,asc"
+      const ordenacao = {};
+      const campos = sort.split(',');
+      for (let i = 0; i < campos.length; i += 2) {
+        ordenacao[campos[i]] = campos[i+1] === 'asc' ? 1 : -1;
+      }
+      cursor = cursor.sort(ordenacao);
     }
-  });
+
+    const max = limit ? Number(limit) : 1000;
+    const dados = await cursor.limit(max).toArray();
+    res.json(dados);
+
+  } catch (erro) {
+    console.error('Erro ao buscar usuários filtrados:', erro);
+    res.status(500).json({ erro: 'Falha ao buscar usuários.' });
+  }
+});
+
 
   // POST - inserir
   app.post(`/${nomeCollection}`, async (req, res) => {
