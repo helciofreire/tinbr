@@ -190,7 +190,7 @@ async function iniciarServidor() {
           ok: true,
           nome: user.nome ?? "",
           nivel: user.nivel ?? "",
-          cliente: user.cliente_id ?? "",
+          cliente_id: user.cliente_id ?? "",
           mensagem: "Login realizado com sucesso."
         });
 
