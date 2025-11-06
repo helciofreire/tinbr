@@ -163,16 +163,52 @@ async function iniciarServidor() {
       await criarRota(nome);
     }
 
-    // ✅ **NOVA ROTA PARA MANTER O RENDER ACORDADO**
-    app.get("/health", (req, res) => {
-  const conectado = client && client.topology && client.topology.isConnected();
-  res.status(200).json({
-    status: "UP",
-    mongo: conectado ? "connected" : "disconnected",
-    timestamp: new Date().toISOString(),
-  });
-});
+    // ✅ LOGIN DE USUÁRIO (NOVO)
+    app.post("/users/login", async (req, res) => {
+      try {
+        const { login, senha, tipo } = req.body;
 
+        if (!login || !senha) {
+          return res.json({ ok: false, mensagem: "Login e senha são obrigatórios." });
+        }
+
+        const campo = tipo === "email" ? "email" : "documento";
+
+        const user = await db.collection("users").findOne({
+          [campo]: String(login).trim(),
+          senha: String(senha).trim()
+        });
+
+        if (!user) {
+          return res.json({
+            ok: false,
+            mensagem: "Usuário ou senha incorretos."
+          });
+        }
+
+        return res.json({
+          ok: true,
+          nome: user.nome ?? "",
+          nivel: user.nivel ?? "",
+          cliente: user.cliente_id ?? "",
+          mensagem: "Login realizado com sucesso."
+        });
+
+      } catch (erro) {
+        console.error("❌ Erro no login:", erro);
+        res.json({ ok: false, mensagem: "Erro no servidor." });
+      }
+    });
+
+    // ✅ ROTA PARA MANTER O RENDER ACORDADO
+    app.get("/health", (req, res) => {
+      const conectado = client && client.topology && client.topology.isConnected();
+      res.status(200).json({
+        status: "UP",
+        mongo: conectado ? "connected" : "disconnected",
+        timestamp: new Date().toISOString(),
+      });
+    });
 
     app.get("/", (req, res) => res.send("🚀 API MongoDB OK!"));
 
