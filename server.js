@@ -1,133 +1,65 @@
 import express from "express";
 import cors from "cors";
-import { MongoClient, ObjectId } from "mongodb";
-import dotenv from "dotenv";
-import bcrypt from "bcryptjs";
+import bcrypt from "bcrypt";
+import { MongoClient } from "mongodb";
 
-dotenv.config();
-
-const app = express();
-app.use(cors());
-app.use(express.json({ limit: "50mb" }));
-
-const client = new MongoClient(process.env.MONGO_URI);
-let db;
-
-// ✅ Normaliza campos: remove acentos, espaços e renomeia campos conhecidos
-function normalizar(obj) {
-  const map = {
-    "e-mail": "email",
-    "função": "funcao",
-    "responsável": "responsavel",
-    "código": "codigo",
-    "nível": "nivel"
-  };
-
-  const novo = {};
-  for (const chave in obj) {
-    const chaveSemAcento = chave.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-    const chaveFinal = map[chave] || chaveSemAcento.trim();
-    let valor = obj[chave];
-
-    if (typeof valor === "string") valor = valor.trim();
-    if (chaveFinal === "cliente_id") valor = String(valor).trim();
-
-    novo[chaveFinal] = valor;
-  }
-  return novo;
-}
-
-// ✅ Função que valida força da senha
+// -----------------------------------------------------
+// Função para validar senha forte
+// -----------------------------------------------------
 function senhaValida(senha) {
-  // Min 8 caracteres, 1 minúscula, 1 maiúscula, 1 número e 1 caractere especial
+  // Min 8 chars, 1 maiúscula, 1 minúscula, 1 número, 1 especial
   const regex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
   return regex.test(senha);
 }
 
-// ✅ Cria rotas REST automáticas para coleções
-async function criarRota(nomeCollection) {
-  const collection = db.collection(nomeCollection);
+// -----------------------------------------------------
+// Normalização de dados
+// -----------------------------------------------------
+function normalizar(dados) {
+  const obj = { ...dados };
 
-  // LISTAR
-  app.get(`/${nomeCollection}`, async (req, res) => {
-    try {
-      const { cliente_id, nivel_gt, limit, sort } = req.query;
-      const query = {};
-      if (cliente_id) query.cliente_id = String(cliente_id).trim();
-      if (nivel_gt) query.nivel = { $gt: Number(nivel_gt) };
+  if (obj.nome) obj.nome = obj.nome.trim();
+  if (obj.email) obj.email = obj.email.trim().toLowerCase();
+  if (obj.documento) obj.documento = obj.documento.replace(/[^\d]/g, "");
+  if (obj.login) obj.login = obj.login.trim().toLowerCase(); // caso venha login genérico
 
-      let cursor = collection.find(query);
-
-      if (sort) {
-        const partes = sort.split(",");
-        const ordenacao = {};
-        for (let i = 0; i < partes.length; i += 2) {
-          ordenacao[partes[i]] = partes[i + 1] === "asc" ? 1 : -1;
-        }
-        cursor = cursor.sort(ordenacao);
-      }
-
-      const max = limit ? Number(limit) : 1000;
-      const dados = await cursor.limit(max).toArray();
-      res.json(dados);
-    } catch (erro) {
-      console.error("❌ Erro ao listar registros:", erro);
-      res.status(500).json({ erro: "Falha ao buscar dados." });
-    }
-  });
-
-  // BUSCAR POR ID
-  app.get(`/${nomeCollection}/:id`, async (req, res) => {
-    try {
-      const id = String(req.params.id).trim();
-      const registro = await collection.findOne({ _id: new ObjectId(id) });
-      if (!registro) return res.status(404).json({ erro: "Não encontrado" });
-      res.json(registro);
-    } catch (erro) {
-      console.error("❌ Erro ao buscar por ID:", erro);
-      res.status(500).json({ erro: "Erro ao buscar registro." });
-    }
-  });
-
-  // INSERIR
-  app.post(`/${nomeCollection}`, async (req, res) => {
-    try {
-      const doc = normalizar(req.body);
-      const result = await collection.insertOne(doc);
-      res.status(201).json({ sucesso: true, id: result.insertedId });
-    } catch (erro) {
-      console.error("❌ Erro ao inserir registro:", erro);
-      res.status(500).json({ erro: erro.message });
-    }
-  });
-
-  // ATUALIZAR
-  app.put(`/${nomeCollection}/:id`, async (req, res) => {
-    try {
-      const id = String(req.params.id).trim();
-      const dados = normalizar(req.body);
-      const result = await collection.updateOne({ _id: new ObjectId(id) }, { $set: dados });
-      res.json({ sucesso: result.modifiedCount === 1 });
-    } catch (erro) {
-      console.error("❌ Erro ao atualizar registro:", erro);
-      res.status(500).json({ erro: erro.message });
-    }
-  });
-
-  // EXCLUIR
-  app.delete(`/${nomeCollection}/:id`, async (req, res) => {
-    try {
-      const id = String(req.params.id).trim();
-      const result = await collection.deleteOne({ _id: new ObjectId(id) });
-      res.json({ sucesso: result.deletedCount === 1 });
-    } catch (erro) {
-      console.error("❌ Erro ao excluir registro:", erro);
-      res.status(500).json({ erro: erro.message });
-    }
-  });
+  return obj;
 }
 
-// ✅ INSERIR USUÁRIO COM SENHA HASH
+// -----------------------------------------------------
+// Configuração Express
+// -----------------------------------------------------
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+// -----------------------------------------------------
+// Conexão MongoDB
+// -----------------------------------------------------
+const client = new MongoClient(process.env.MONGO_URL);
+let db;
+
+async function conectarBanco() {
+  try {
+    await client.connect();
+    db = client.db(process.env.MONGO_DB);
+    console.log("✅ MongoDB conectado:", process.env.MONGO_DB);
+
+    // Criar índices se ainda não existirem
+    await db.collection("users").createIndex({ email: 1 }, { unique: true });
+    await db.collection("users").createIndex({ documento: 1 }, { unique: true });
+
+    console.log("✅ Índices garantidos (email e documento únicos)");
+
+  } catch (erro) {
+    console.error("❌ Erro ao conectar banco:", erro);
+  }
+}
+conectarBanco();
+
+// -----------------------------------------------------
+// ✅ Criar Usuário (Cadastro)
+// -----------------------------------------------------
 app.post("/users", async (req, res) => {
   try {
     const dados = normalizar(req.body);
@@ -136,10 +68,11 @@ app.post("/users", async (req, res) => {
       return res.status(400).json({ ok: false, mensagem: "Campos obrigatórios faltando (nome, email, senha, cliente_id)." });
     }
 
-    if (dados.documento) dados.documento = dados.documento.replace(/[^\d]/g, "");
-
     if (!senhaValida(dados.senha)) {
-      return res.status(400).json({ ok: false, mensagem: "A senha deve ter no mínimo 8 caracteres, contendo: letra maiúscula, letra minúscula, número e caractere especial." });
+      return res.status(400).json({
+        ok: false,
+        mensagem: "A senha deve ter no mínimo 8 caracteres, contendo: letra maiúscula, letra minúscula, número e caractere especial."
+      });
     }
 
     const senhaHash = await bcrypt.hash(dados.senha, 10);
@@ -166,39 +99,51 @@ app.post("/users", async (req, res) => {
   }
 });
 
+// -----------------------------------------------------
+// ✅ Login (email ou documento)
+// -----------------------------------------------------
+app.post("/users/login", async (req, res) => {
+  try {
+    let { login, senha } = req.body;
 
-// ✅ HEALTH CHECK
-app.get("/health", (req, res) => {
-  res.status(200).json({
-    status: "UP",
-    timestamp: new Date().toISOString()
-  });
+    if (!login || !senha) {
+      return res.status(400).json({ ok: false, mensagem: "Login e senha são obrigatórios." });
+    }
+
+    login = login.trim();
+
+    const filtro = login.includes("@")
+      ? { email: login.toLowerCase() }
+      : { documento: login.replace(/[^\d]/g, "") };
+
+    const usuario = await db.collection("users").findOne(filtro);
+
+    if (!usuario) {
+      return res.status(400).json({ ok: false, mensagem: "Usuário não encontrado." });
+    }
+
+    const senhaCorreta = await bcrypt.compare(senha, usuario.senha);
+
+    if (!senhaCorreta) {
+      return res.status(401).json({ ok: false, mensagem: "Senha incorreta." });
+    }
+
+    return res.json({
+      ok: true,
+      nome: usuario.nome,
+      nivel: usuario.nivel ?? "",
+      cliente_id: usuario.cliente_id ?? "",
+      mensagem: "Login realizado com sucesso."
+    });
+
+  } catch (erro) {
+    console.error("❌ Erro no login:", erro);
+    return res.status(500).json({ ok: false, mensagem: "Erro ao realizar login." });
+  }
 });
 
-
-app.get("/", (req, res) => res.send("🚀 API MongoDB OK!"));
-
-// ✅ Inicialização
-async function iniciarServidor() {
-  try {
-    console.log("🔌 Conectando ao MongoDB...");
-    await client.connect();
-    db = client.db("tinbr");
-    console.log("✅ Conectado ao MongoDB!");
-
-    // Garante índices únicos
-    await db.collection("users").createIndex({ email: 1 }, { unique: true });
-    await db.collection("users").createIndex({ documento: 1 }, { unique: true });
-
-    const colecoes = ["clientes", "mercado", "operacoes", "proprietarios", "referencia", "tks", "players"];
-    for (const nome of colecoes) await criarRota(nome);
-
-    const PORT = process.env.PORT || 3000;
-    app.listen(PORT, () => console.log(`✅ Servidor rodando na porta ${PORT}`));
-  } catch (erro) {
-    console.error("❌ Falha ao iniciar servidor:", erro);
-    process.exit(1);
-  }
-}
-
-iniciarServidor();
+// -----------------------------------------------------
+// Iniciar servidor
+// -----------------------------------------------------
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`🚀 Servidor online na porta ${PORT}`));
