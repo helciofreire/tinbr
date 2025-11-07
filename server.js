@@ -119,32 +119,62 @@ async function criarRota(nomeCollection) {
   });
 }
 
-// ✅ LOGIN DE USUÁRIO COM SENHA CRIPTOGRAFADA
-app.post("/users/login", async (req, res) => {
+// Função para validar a força da senha
+function senhaValida(senha) {
+  // Mínimo 8 caracteres, 1 minúscula, 1 maiúscula, 1 número, 1 caractere especial
+  const regex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
+  return regex.test(senha);
+}
+
+// INSERIR USUÁRIO COM SENHA HASH
+app.post("/users", async (req, res) => {
   try {
-    const { login, senha, tipo } = req.body;
-    if (!login || !senha) return res.json({ ok: false, mensagem: "Login e senha são obrigatórios." });
+    const dados = normalizar(req.body);
 
-    const campo = tipo === "email" ? "email" : "documento";
-    const user = await db.collection("users").findOne({ [campo]: String(login).trim() });
-    if (!user) return res.json({ ok: false, mensagem: "Usuário ou senha incorretos." });
+    // Verifica campos obrigatórios
+    if (!dados.nome || !dados.login || !dados.senha || !dados.cliente_id) {
+      return res.status(400).json({
+        ok: false,
+        mensagem: "Campos obrigatórios faltando."
+      });
+    }
 
-    const senhaCorreta = await bcrypt.compare(String(senha).trim(), user.senha);
-    if (!senhaCorreta) return res.json({ ok: false, mensagem: "Usuário ou senha incorretos." });
+    // ✅ Validação de força da senha
+    if (!senhaValida(dados.senha)) {
+      return res.status(400).json({
+        ok: false,
+        mensagem: "A senha deve ter no mínimo 8 caracteres, contendo: letra maiúscula, letra minúscula, número e caractere especial."
+      });
+    }
 
-    return res.json({
+    // 🔹 Cria hash da senha
+    const senhaHash = await bcrypt.hash(dados.senha, 10);
+
+    // 🔹 Monta objeto final
+    const novoUsuario = {
+      ...dados,
+      senha: senhaHash,
+      criadoEm: new Date(),
+      atualizadoEm: new Date()
+    };
+
+    const result = await db.collection("users").insertOne(novoUsuario);
+
+    return res.status(201).json({
       ok: true,
-      nome: user.nome ?? "",
-      nivel: user.nivel ?? "",
-      cliente_id: user.cliente_id ?? "",
-      mensagem: "Login realizado com sucesso."
+      id: result.insertedId,
+      mensagem: "✅ Usuário criado com sucesso."
     });
 
   } catch (erro) {
-    console.error("❌ Erro no login:", erro);
-    res.json({ ok: false, mensagem: "Erro no servidor." });
+    console.error("❌ Erro ao criar usuário:", erro);
+    return res.status(500).json({
+      ok: false,
+      mensagem: "Erro ao criar usuário."
+    });
   }
 });
+
 
 // ✅ HEALTH CHECK
 app.get("/health", (req, res) => {
@@ -165,7 +195,7 @@ async function iniciarServidor() {
     db = client.db("tinbr");
     console.log("✅ Conectado ao MongoDB!");
 
-    const colecoes = ["clientes", "mercado", "operacoes", "proprietarios", "referencia", "tks", "users", "players"];
+    const colecoes = ["clientes", "mercado", "operacoes", "proprietarios", "referencia", "tks", "players"];
     for (const nome of colecoes) await criarRota(nome);
 
     const PORT = process.env.PORT || 3000;
