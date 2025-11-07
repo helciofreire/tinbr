@@ -195,6 +195,9 @@ async function iniciarServidor() {
     db = client.db("tinbr");
     console.log("✅ Conectado ao MongoDB!");
 
+    // ✅ Garante que o campo login seja único e indexado
+    await db.collection("users").createIndex({ login: 1 }, { unique: true });
+
     const colecoes = ["clientes", "mercado", "operacoes", "proprietarios", "referencia", "tks", "players"];
     for (const nome of colecoes) await criarRota(nome);
 
@@ -206,5 +209,6 @@ async function iniciarServidor() {
     process.exit(1);
   }
 }
+
 
 iniciarServidor();
