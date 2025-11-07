@@ -13,7 +13,7 @@ app.use(express.json({ limit: "50mb" }));
 const client = new MongoClient(process.env.MONGO_URI);
 let db;
 
-// ✅ Remove acentos, renomeia campos e remove espaços do cliente_id
+// ✅ Normaliza campos: remove acentos, espaços e renomeia campos conhecidos
 function normalizar(obj) {
   const map = {
     "e-mail": "email",
@@ -28,15 +28,23 @@ function normalizar(obj) {
     const chaveSemAcento = chave.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
     const chaveFinal = map[chave] || chaveSemAcento.trim();
     let valor = obj[chave];
+
     if (typeof valor === "string") valor = valor.trim();
     if (chaveFinal === "cliente_id") valor = String(valor).trim();
+
     novo[chaveFinal] = valor;
   }
-
   return novo;
 }
 
-// ✅ Cria rotas genéricas para cada collection
+// ✅ Função que valida força da senha
+function senhaValida(senha) {
+  // Min 8 caracteres, 1 minúscula, 1 maiúscula, 1 número e 1 caractere especial
+  const regex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
+  return regex.test(senha);
+}
+
+// ✅ Cria rotas REST automáticas para coleções
 async function criarRota(nomeCollection) {
   const collection = db.collection(nomeCollection);
 
@@ -119,38 +127,23 @@ async function criarRota(nomeCollection) {
   });
 }
 
-// Função para validar a força da senha
-function senhaValida(senha) {
-  // Mínimo 8 caracteres, 1 minúscula, 1 maiúscula, 1 número, 1 caractere especial
-  const regex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
-  return regex.test(senha);
-}
-
-// INSERIR USUÁRIO COM SENHA HASH
+// ✅ INSERIR USUÁRIO COM SENHA HASH
 app.post("/users", async (req, res) => {
   try {
     const dados = normalizar(req.body);
 
-    // Verifica campos obrigatórios
-    if (!dados.nome || !dados.login || !dados.senha || !dados.cliente_id) {
-      return res.status(400).json({
-        ok: false,
-        mensagem: "Campos obrigatórios faltando."
-      });
+    if (!dados.nome || !dados.email || !dados.senha || !dados.cliente_id) {
+      return res.status(400).json({ ok: false, mensagem: "Campos obrigatórios faltando (nome, email, senha, cliente_id)." });
     }
 
-    // ✅ Validação de força da senha
+    if (dados.documento) dados.documento = dados.documento.replace(/[^\d]/g, "");
+
     if (!senhaValida(dados.senha)) {
-      return res.status(400).json({
-        ok: false,
-        mensagem: "A senha deve ter no mínimo 8 caracteres, contendo: letra maiúscula, letra minúscula, número e caractere especial."
-      });
+      return res.status(400).json({ ok: false, mensagem: "A senha deve ter no mínimo 8 caracteres, contendo: letra maiúscula, letra minúscula, número e caractere especial." });
     }
 
-    // 🔹 Cria hash da senha
     const senhaHash = await bcrypt.hash(dados.senha, 10);
 
-    // 🔹 Monta objeto final
     const novoUsuario = {
       ...dados,
       senha: senhaHash,
@@ -160,34 +153,32 @@ app.post("/users", async (req, res) => {
 
     const result = await db.collection("users").insertOne(novoUsuario);
 
-    return res.status(201).json({
-      ok: true,
-      id: result.insertedId,
-      mensagem: "✅ Usuário criado com sucesso."
-    });
+    return res.status(201).json({ ok: true, id: result.insertedId, mensagem: "✅ Usuário criado com sucesso." });
 
   } catch (erro) {
     console.error("❌ Erro ao criar usuário:", erro);
-    return res.status(500).json({
-      ok: false,
-      mensagem: "Erro ao criar usuário."
-    });
+
+    if (erro.code === 11000) {
+      return res.status(400).json({ ok: false, mensagem: "Email ou Documento já cadastrado." });
+    }
+
+    return res.status(500).json({ ok: false, mensagem: "Erro ao criar usuário." });
   }
 });
 
 
 // ✅ HEALTH CHECK
 app.get("/health", (req, res) => {
-  const conectado = client && client.topology && client.topology.isConnected();
   res.status(200).json({
     status: "UP",
-    mongo: conectado ? "connected" : "disconnected",
-    timestamp: new Date().toISOString(),
+    timestamp: new Date().toISOString()
   });
 });
 
+
 app.get("/", (req, res) => res.send("🚀 API MongoDB OK!"));
 
+// ✅ Inicialização
 async function iniciarServidor() {
   try {
     console.log("🔌 Conectando ao MongoDB...");
@@ -195,20 +186,19 @@ async function iniciarServidor() {
     db = client.db("tinbr");
     console.log("✅ Conectado ao MongoDB!");
 
-    // ✅ Garante que o campo login seja único e indexado
-    await db.collection("users").createIndex({ login: 1 }, { unique: true });
+    // Garante índices únicos
+    await db.collection("users").createIndex({ email: 1 }, { unique: true });
+    await db.collection("users").createIndex({ documento: 1 }, { unique: true });
 
     const colecoes = ["clientes", "mercado", "operacoes", "proprietarios", "referencia", "tks", "players"];
     for (const nome of colecoes) await criarRota(nome);
 
     const PORT = process.env.PORT || 3000;
     app.listen(PORT, () => console.log(`✅ Servidor rodando na porta ${PORT}`));
-
   } catch (erro) {
     console.error("❌ Falha ao iniciar servidor:", erro);
     process.exit(1);
   }
 }
-
 
 iniciarServidor();
