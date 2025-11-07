@@ -142,6 +142,17 @@ app.post("/users/login", async (req, res) => {
   }
 });
 
+app.get("/health", (req, res) => {
+  return res.status(200).json({ ok: true, status: "online" });
+});
+
+// -----------------------------------------------------
+// Iniciar servidor
+// -----------------------------------------------------
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`🚀 Servidor online na porta ${PORT}`));
+
+
 // -----------------------------------------------------
 // Iniciar servidor
 // -----------------------------------------------------
