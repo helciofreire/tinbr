@@ -51,93 +51,68 @@ function normalizar(dados) {
   return obj;
 }
 
-// ========================================
-// USERS
-// ========================================
+// ======================= USERS =======================
 
-// Criar
-app.post("/users", async (req, res) => {
+// GET - Listar todos os usuários
+app.get("/users", async (req, res) => {
   try {
-    const dados = normalizar(req.body);
-
-    if (!dados.email || !dados.senha || !dados.nome || !dados.cliente_id) {
-      return res.status(400).json({ ok: false, mensagem: "Campos obrigatórios faltando." });
-    }
-
-    if (!senhaValida(dados.senha)) {
-      return res.status(400).json({ ok: false, mensagem: "Senha fraca." });
-    }
-
-    dados.senha = await bcrypt.hash(dados.senha, 10);
-    dados.criadoEm = new Date();
-    dados.atualizadoEm = new Date();
-
-    await db.collection("users").insertOne(dados);
-    res.json({ ok: true, mensagem: "Usuário criado." });
-
-  } catch (erro) {
-    console.error("Erro:", erro);
-    res.status(500).json({ ok: false, mensagem: "Falha ao criar." });
+    const users = await db.collection("users").find().toArray();
+    res.json(users);
+  } catch (err) {
+    console.error("Erro ao buscar usuários:", err);
+    res.status(500).json({ erro: "Erro ao buscar usuários" });
   }
 });
 
-// Login
-app.post("/users/login", async (req, res) => {
-  try {
-    let { login, senha } = req.body;
-
-    const filtro = login.includes("@")
-      ? { email: login.toLowerCase() }
-      : { documento: login.replace(/[^\d]/g, "") };
-
-    const user = await db.collection("users").findOne(filtro);
-    if (!user) return res.json({ ok: false, mensagem: "Usuário não encontrado." });
-
-    const ok = await bcrypt.compare(senha, user.senha);
-    if (!ok) return res.json({ ok: false, mensagem: "Senha incorreta." });
-
-    res.json({ ok: true, nome: user.nome, cliente_id: user.cliente_id, nivel: user.nivel });
-
-  } catch (erro) {
-    res.json({ ok: false });
-  }
-});
-
-// Buscar 1
+// GET - Buscar um usuário por ID
 app.get("/users/:id", async (req, res) => {
   try {
-    const user = await db.collection("users").findOne({ _id: req.params.id });
-    if (!user) return res.status(404).json({ ok: false });
+    const id = req.params.id;
+    const user = await db.collection("users").findOne({ _id: new ObjectId(id) });
+    if (!user) return res.status(404).json({ erro: "Usuário não encontrado" });
     res.json(user);
-  } catch {
-    res.status(500).json({ ok: false });
+  } catch (err) {
+    res.status(500).json({ erro: "Erro ao buscar usuário" });
   }
 });
 
-// Atualizar
-app.put("/users/:id", async (req, res) => {
+// POST - Criar novo usuário
+app.post("/users", async (req, res) => {
   try {
     const dados = req.body;
-
-    if (dados.senha) {
-      if (!senhaValida(dados.senha)) return res.json({ ok: false, mensagem: "Senha fraca." });
-      dados.senha = await bcrypt.hash(dados.senha, 10);
-    }
-
-    dados.atualizadoEm = new Date();
-
-    await db.collection("users").updateOne({ _id: req.params.id }, { $set: dados });
-    res.json({ ok: true, mensagem: "Atualizado." });
-
-  } catch {
-    res.status(500).json({ ok: false });
+    dados.criadoEm = new Date();
+    const resultado = await db.collection("users").insertOne(dados);
+    res.json({ sucesso: true, _id: resultado.insertedId });
+  } catch (err) {
+    res.status(500).json({ erro: "Erro ao criar usuário" });
   }
 });
 
-// Deletar
+// PUT - Atualizar usuário
+app.put("/users/:id", async (req, res) => {
+  try {
+    const id = req.params.id;
+    const dados = req.body;
+    dados.atualizadoEm = new Date();
+    const resultado = await db.collection("users").updateOne(
+      { _id: new ObjectId(id) },
+      { $set: dados }
+    );
+    res.json({ sucesso: true, resultado });
+  } catch (err) {
+    res.status(500).json({ erro: "Erro ao atualizar usuário" });
+  }
+});
+
+// DELETE - Remover usuário
 app.delete("/users/:id", async (req, res) => {
-  await db.collection("users").deleteOne({ _id: req.params.id });
-  res.json({ ok: true });
+  try {
+    const id = req.params.id;
+    const resultado = await db.collection("users").deleteOne({ _id: new ObjectId(id) });
+    res.json({ sucesso: true, resultado });
+  } catch (err) {
+    res.status(500).json({ erro: "Erro ao remover usuário" });
+  }
 });
 
 // ========================================
@@ -196,5 +171,6 @@ criarCRUD("operacoes");
 // ----------------------------------------
 app.get("/health", (req, res) => res.json({ status: "ok" }));
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`🚀 Servidor online na porta ${PORT}`));
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, "0.0.0.0", () => console.log("Servidor rodando na porta", PORT));
+
