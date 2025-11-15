@@ -201,12 +201,51 @@ app.post("/users/login", async (req, res) => {
       });
     }
 
-    // ✅ VERIFICA SENHA (se estiver usando bcrypt)
-    // Se suas senhas estão hasheadas:
-    const senhaValida = await bcrypt.compare(senha, usuario.senha);
-    // Se não estão hasheadas (em texto puro):
-    // const senhaValida = senha === usuario.senha;
+// ======================= LOGIN =======================
+app.post("/users/login", async (req, res) => {
+  try {
+    const { email, cpf, senha } = req.body;
+    
+    console.log("🔐 Tentativa de login:", { email, cpf });
 
+    // ✅ VALIDAÇÃO BÁSICA
+    if (!senha) {
+      return res.json({ 
+        ok: false, 
+        mensagem: "Senha é obrigatória." 
+      });
+    }
+
+    // ✅ BUSCA O USUÁRIO POR EMAIL OU CPF
+    let usuario;
+    if (email) {
+      usuario = await db.collection("users").findOne({ 
+        email: email.trim().toLowerCase() 
+      });
+    } else if (cpf) {
+      const cpfLimpo = cpf.replace(/\D/g, '');
+      usuario = await db.collection("users").findOne({ 
+        documento: cpfLimpo 
+      });
+    } else {
+      return res.json({ 
+        ok: false, 
+        mensagem: "Email ou CPF é obrigatório." 
+      });
+    }
+
+    // ✅ VERIFICA SE USUÁRIO EXISTE
+    if (!usuario) {
+      console.log("❌ Usuário não encontrado");
+      return res.json({ 
+        ok: false, 
+        mensagem: "Usuário não encontrado." 
+      });
+    }
+
+    // ✅ VERIFICA SENHA (COM BCRYPT - PARA SENHAS HASHEADAS)
+    const senhaValida = await bcrypt.compare(senha, usuario.senha);
+    
     if (!senhaValida) {
       console.log("❌ Senha inválida para:", usuario.email || usuario.documento);
       return res.json({ 
