@@ -159,6 +159,82 @@ function criarCRUD(nomeColecao) {
 
 }
 
+// ======================= LOGIN =======================
+app.post("/users/login", async (req, res) => {
+  try {
+    const { email, cpf, senha } = req.body;
+    
+    console.log("🔐 Tentativa de login:", { email, cpf });
+
+    // ✅ VALIDAÇÃO BÁSICA
+    if (!senha) {
+      return res.json({ 
+        ok: false, 
+        mensagem: "Senha é obrigatória." 
+      });
+    }
+
+    // ✅ BUSCA O USUÁRIO POR EMAIL OU CPF
+    let usuario;
+    if (email) {
+      usuario = await db.collection("users").findOne({ 
+        email: email.trim().toLowerCase() 
+      });
+    } else if (cpf) {
+      const cpfLimpo = cpf.replace(/\D/g, '');
+      usuario = await db.collection("users").findOne({ 
+        documento: cpfLimpo 
+      });
+    } else {
+      return res.json({ 
+        ok: false, 
+        mensagem: "Email ou CPF é obrigatório." 
+      });
+    }
+
+    // ✅ VERIFICA SE USUÁRIO EXISTE
+    if (!usuario) {
+      console.log("❌ Usuário não encontrado");
+      return res.json({ 
+        ok: false, 
+        mensagem: "Usuário não encontrado." 
+      });
+    }
+
+    // ✅ VERIFICA SENHA (se estiver usando bcrypt)
+    // Se suas senhas estão hasheadas:
+    const senhaValida = await bcrypt.compare(senha, usuario.senha);
+    // Se não estão hasheadas (em texto puro):
+    // const senhaValida = senha === usuario.senha;
+
+    if (!senhaValida) {
+      console.log("❌ Senha inválida para:", usuario.email || usuario.documento);
+      return res.json({ 
+        ok: false, 
+        mensagem: "Senha incorreta." 
+      });
+    }
+
+    console.log("✅ Login bem-sucedido:", usuario.nome);
+
+    // ✅ RETORNA DADOS DO USUÁRIO (sem a senha)
+    res.json({
+      ok: true,
+      nome: usuario.nome,
+      nivel: usuario.nivel,
+      cliente_id: usuario.cliente_id,
+      mensagem: "Login realizado com sucesso."
+    });
+
+  } catch (erro) {
+    console.error("❌ Erro no login:", erro);
+    res.status(500).json({ 
+      ok: false, 
+      mensagem: "Erro interno no servidor." 
+    });
+  }
+});
+
 // Criar CRUD genérico
 criarCRUD("clientes");
 criarCRUD("players");
