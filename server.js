@@ -95,7 +95,8 @@ app.put("/users/:id", async (req, res) => {
     const dados = req.body;
     dados.atualizadoEm = new Date();
     const resultado = await db.collection("users").updateOne(
-      { _id: new ObjectId(id) },
+      //{ _id: new ObjectId(id) },
+      { _id: id },
       { $set: dados }
     );
     res.json({ sucesso: true, resultado });
@@ -108,7 +109,8 @@ app.put("/users/:id", async (req, res) => {
 app.delete("/users/:id", async (req, res) => {
   try {
     const id = req.params.id;
-    const resultado = await db.collection("users").deleteOne({ _id: new ObjectId(id) });
+    //const resultado = await db.collection("users").deleteOne({ _id: new ObjectId(id) });
+    const resultado = await db.collection("users").deleteOne({ _id: id });
     res.json({ sucesso: true, resultado });
   } catch (err) {
     res.status(500).json({ erro: "Erro ao remover usuário" });
