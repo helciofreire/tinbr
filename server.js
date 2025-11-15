@@ -67,7 +67,8 @@ app.get("/users", async (req, res) => {
 app.get("/users/:id", async (req, res) => {
   try {
     const id = req.params.id;
-    const user = await db.collection("users").findOne({ _id: new ObjectId(id) });
+    //const user = await db.collection("users").findOne({ _id: new ObjectId(id) });
+    const user = await db.collection("users").findOne({ _id: id });
     if (!user) return res.status(404).json({ erro: "Usuário não encontrado" });
     res.json(user);
   } catch (err) {
