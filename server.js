@@ -25,7 +25,6 @@ async function conectarBanco() {
     // Índices mínimos
     await db.collection("users").createIndex({ email: 1 }, { unique: true });
     await db.collection("users").createIndex({ documento: 1 }, { unique: true });
-
     await db.collection("clientes").createIndex({ cliente_id: 1 }, { unique: true });
 
     console.log("✅ Índices garantidos (users + clientes)");
@@ -115,6 +114,74 @@ app.delete("/users/:id", async (req, res) => {
   }
 });
 
+// ======================= LOGIN =======================
+app.post("/users/login", async (req, res) => {
+  try {
+    const { email, cpf, senha } = req.body;
+    
+    console.log("🔐 Tentativa de login:", { 
+      email: email?.substring(0, 10) + '...', 
+      cpf: cpf?.substring(0, 3) + '...',
+      temSenha: !!senha 
+    });
+
+    // ✅ BUSCA O USUÁRIO
+    let usuario;
+    if (email) {
+      usuario = await db.collection("users").findOne({ 
+        email: email.trim().toLowerCase() 
+      });
+    } else if (cpf) {
+      const cpfLimpo = cpf.replace(/\D/g, '');
+      usuario = await db.collection("users").findOne({ 
+        documento: cpfLimpo 
+      });
+    } else {
+      return res.json({ 
+        ok: false, 
+        mensagem: "Email ou CPF é obrigatório." 
+      });
+    }
+
+    if (!usuario) {
+      console.log("❌ Usuário não encontrado");
+      return res.json({ 
+        ok: false, 
+        mensagem: "Usuário não encontrado." 
+      });
+    }
+
+    // ✅ VERIFICA SENHA COM BCRYPT
+    console.log("🔑 Comparando senha...");
+    const senhaValida = await bcrypt.compare(senha, usuario.senha);
+    console.log("✅ Resultado da comparação:", senhaValida);
+
+    if (!senhaValida) {
+      return res.json({ 
+        ok: false, 
+        mensagem: "Senha incorreta." 
+      });
+    }
+
+    // ✅ SUCESSO
+    console.log("✅ Login bem-sucedido:", usuario.nome);
+    res.json({
+      ok: true,
+      nome: usuario.nome,
+      nivel: usuario.nivel,
+      cliente_id: usuario.cliente_id,
+      mensagem: "Login realizado com sucesso."
+    });
+
+  } catch (erro) {
+    console.error("❌ Erro no login:", erro);
+    res.status(500).json({ 
+      ok: false, 
+      mensagem: "Erro interno no servidor." 
+    });
+  }
+});
+
 // ========================================
 // FUNÇÃO CRUD GENÉRICO PARA OUTRAS TABELAS
 // ========================================
@@ -159,121 +226,6 @@ function criarCRUD(nomeColecao) {
 
 }
 
-// ======================= LOGIN =======================
-app.post("/users/login", async (req, res) => {
-  try {
-    const { email, cpf, senha } = req.body;
-    
-    console.log("🔐 Tentativa de login:", { email, cpf });
-
-    // ✅ VALIDAÇÃO BÁSICA
-    if (!senha) {
-      return res.json({ 
-        ok: false, 
-        mensagem: "Senha é obrigatória." 
-      });
-    }
-
-    // ✅ BUSCA O USUÁRIO POR EMAIL OU CPF
-    let usuario;
-    if (email) {
-      usuario = await db.collection("users").findOne({ 
-        email: email.trim().toLowerCase() 
-      });
-    } else if (cpf) {
-      const cpfLimpo = cpf.replace(/\D/g, '');
-      usuario = await db.collection("users").findOne({ 
-        documento: cpfLimpo 
-      });
-    } else {
-      return res.json({ 
-        ok: false, 
-        mensagem: "Email ou CPF é obrigatório." 
-      });
-    }
-
-    // ✅ VERIFICA SE USUÁRIO EXISTE
-    if (!usuario) {
-      console.log("❌ Usuário não encontrado");
-      return res.json({ 
-        ok: false, 
-        mensagem: "Usuário não encontrado." 
-      });
-    }
-
-// ======================= LOGIN =======================
-app.post("/users/login", async (req, res) => {
-  try {
-    const { email, cpf, senha } = req.body;
-    
-    console.log("🔐 Tentativa de login:", { email, cpf });
-
-    // ✅ VALIDAÇÃO BÁSICA
-    if (!senha) {
-      return res.json({ 
-        ok: false, 
-        mensagem: "Senha é obrigatória." 
-      });
-    }
-
-    // ✅ BUSCA O USUÁRIO POR EMAIL OU CPF
-    let usuario;
-    if (email) {
-      usuario = await db.collection("users").findOne({ 
-        email: email.trim().toLowerCase() 
-      });
-    } else if (cpf) {
-      const cpfLimpo = cpf.replace(/\D/g, '');
-      usuario = await db.collection("users").findOne({ 
-        documento: cpfLimpo 
-      });
-    } else {
-      return res.json({ 
-        ok: false, 
-        mensagem: "Email ou CPF é obrigatório." 
-      });
-    }
-
-    // ✅ VERIFICA SE USUÁRIO EXISTE
-    if (!usuario) {
-      console.log("❌ Usuário não encontrado");
-      return res.json({ 
-        ok: false, 
-        mensagem: "Usuário não encontrado." 
-      });
-    }
-
-    // ✅ VERIFICA SENHA (COM BCRYPT - PARA SENHAS HASHEADAS)
-    const senhaValida = await bcrypt.compare(senha, usuario.senha);
-    
-    if (!senhaValida) {
-      console.log("❌ Senha inválida para:", usuario.email || usuario.documento);
-      return res.json({ 
-        ok: false, 
-        mensagem: "Senha incorreta." 
-      });
-    }
-
-    console.log("✅ Login bem-sucedido:", usuario.nome);
-
-    // ✅ RETORNA DADOS DO USUÁRIO (sem a senha)
-    res.json({
-      ok: true,
-      nome: usuario.nome,
-      nivel: usuario.nivel,
-      cliente_id: usuario.cliente_id,
-      mensagem: "Login realizado com sucesso."
-    });
-
-  } catch (erro) {
-    console.error("❌ Erro no login:", erro);
-    res.status(500).json({ 
-      ok: false, 
-      mensagem: "Erro interno no servidor." 
-    });
-  }
-});
-
 // Criar CRUD genérico
 criarCRUD("clientes");
 criarCRUD("players");
@@ -289,3 +241,4 @@ app.get("/health", (req, res) => res.json({ status: "ok" }));
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, "0.0.0.0", () => console.log("Servidor rodando na porta", PORT));
 
+export default app;
