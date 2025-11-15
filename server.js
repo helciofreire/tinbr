@@ -23,9 +23,9 @@ async function conectarBanco() {
     console.log("✅ MongoDB conectado:", process.env.MONGO_DB);
 
     // Índices mínimos
-    await db.collection("users").createIndex({ email: 1 }, { unique: true });
-    await db.collection("users").createIndex({ documento: 1 }, { unique: true });
-    await db.collection("clientes").createIndex({ cliente_id: 1 }, { unique: true });
+    //await db.collection("users").createIndex({ email: 1 }, { unique: true });
+    //await db.collection("users").createIndex({ documento: 1 }, { unique: true });
+    //await db.collection("clientes").createIndex({ cliente_id: 1 }, { unique: true });
 
     console.log("✅ Índices garantidos (users + clientes)");
 
@@ -49,6 +49,74 @@ function normalizar(dados) {
   if (obj.documento) obj.documento = obj.documento.replace(/[^\d]/g, "");
   return obj;
 }
+
+// ======================= CLIENTES =======================
+
+// GET - Listar todos os clientes
+app.get("/clientes", async (req, res) => {
+  try {
+    const clientes = await db.collection("clientes").find().toArray();
+    res.json(clientes);
+  } catch (err) {
+    console.error("Erro ao buscar clientes:", err);
+    res.status(500).json({ erro: "Erro ao buscar clientes" });
+  }
+});
+
+// GET - Buscar um cliente por ID
+app.get("/clientes/:id", async (req, res) => {
+  try {
+    const id = req.params.id;
+    //const cliente = await db.collection("clientes").findOne({ _id: new ObjectId(id) });
+    const cliente = await db.collection("clientes").findOne({ _id: id });
+    if (!cliente) return res.status(404).json({ erro: "Cliente não encontrado" });
+    res.json(cliente);
+  } catch (err) {
+    res.status(500).json({ erro: "Erro ao buscar cliente" });
+  }
+});
+
+// POST - Criar novo cliente
+app.post("/clientes", async (req, res) => {
+  try {
+    const dados = req.body;
+    dados.criadoEm = new Date();
+    const resultado = await db.collection("clientes").insertOne(dados);
+    res.json({ sucesso: true, _id: resultado.insertedId });
+  } catch (err) {
+    res.status(500).json({ erro: "Erro ao criar cliente" });
+  }
+});
+
+// PUT - Atualizar cliente
+app.put("/clientes/:id", async (req, res) => {
+  try {
+    const id = req.params.id;
+    const dados = req.body;
+    dados.atualizadoEm = new Date();
+    const resultado = await db.collection("clientes").updateOne(
+      //{ _id: new ObjectId(id) },
+      { _id: id },
+      { $set: dados }
+    );
+    res.json({ sucesso: true, resultado });
+  } catch (err) {
+    res.status(500).json({ erro: "Erro ao atualizar cliente" });
+  }
+});
+
+// DELETE - Remover cliente
+app.delete("/clientes/:id", async (req, res) => {
+  try {
+    const id = req.params.id;
+    //const resultado = await db.collection("clientes").deleteOne({ _id: new ObjectId(id) });
+    const resultado = await db.collection("clientes").deleteOne({ _id: id });
+    res.json({ sucesso: true, resultado });
+  } catch (err) {
+    res.status(500).json({ erro: "Erro ao remover cliente" });
+  }
+});
+
 
 // ======================= USERS =======================
 
@@ -230,7 +298,7 @@ function criarCRUD(nomeColecao) {
 }
 
 // Criar CRUD genérico
-criarCRUD("clientes");
+//criarCRUD("clientes");
 criarCRUD("players");
 criarCRUD("proprietarios");
 criarCRUD("referencia");
