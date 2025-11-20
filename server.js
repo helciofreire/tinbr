@@ -222,14 +222,42 @@ app.get("/clientes/:id", async (req, res) => {
   }
 });
 
-// POST - Criar novo cliente
+// POST - ADICIONAR novo cliente
 app.post("/clientes", async (req, res) => {
   try {
     const dados = req.body;
+    
+    // ✅ ADICIONAR VALIDAÇÃO DE DUPLICATA
+    if (dados.documento) {
+      const existente = await db.collection("clientes").findOne({
+        documento: dados.documento
+      });
+      
+      if (existente) {
+        return res.status(400).json({ 
+          erro: "Cliente já cadastrado com este documento" 
+        });
+      }
+    }
+    
     dados.criadoEm = new Date();
     const resultado = await db.collection("clientes").insertOne(dados);
-    res.json({ sucesso: true, _id: resultado.insertedId });
+    
+    res.json({ 
+      sucesso: true, 
+      _id: resultado.insertedId 
+    });
+    
   } catch (err) {
+    // ✅ PROTEÇÃO EXTRA - se índice MongoDB bloquear
+    if (err.code === 11000) {
+      const campo = Object.keys(err.keyValue)[0];
+      return res.status(400).json({ 
+        erro: `Já existe um cliente com este ${campo}`
+      });
+    }
+    
+    console.error("❌ Erro ao criar cliente:", err);
     res.status(500).json({ erro: "Erro ao criar cliente" });
   }
 });
@@ -382,6 +410,15 @@ app.post("/users", async (req, res) => {
     });
     
   } catch (err) {
+    // ✅ PROTEÇÃO EXTRA - se índice MongoDB bloquear
+    if (err.code === 11000) {
+      const campo = Object.keys(err.keyValue)[0];
+      return res.status(400).json({ 
+        erro: `Já existe um usuário com este ${campo} para este cliente`
+      });
+    }
+    
+    console.error("❌ Erro ao criar usuário:", err);
     res.status(500).json({ erro: "Erro ao criar usuário" });
   }
 });
