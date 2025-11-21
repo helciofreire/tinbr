@@ -392,6 +392,57 @@ app.get("/users/:id", async (req, res) => {
   }
 });
 
+// POST - Redefinir senha (já recebe hashada)
+app.post("/recuperacao/redefinir-senha", async (req, res) => {
+    try {
+        const { email, novaSenha } = req.body; // novaSenha já está hashada
+        
+        if (!email || !novaSenha) {
+            return res.status(400).json({ 
+                sucesso: false, 
+                mensagem: "Email e nova senha são obrigatórios" 
+            });
+        }
+
+        // Busca usuário
+        const usuario = await db.collection("users").findOne({ 
+            email: email.toLowerCase().trim()
+        });
+
+        if (!usuario) {
+            return res.status(404).json({ 
+                sucesso: false, 
+                mensagem: "Usuário não encontrado" 
+            });
+        }
+
+        // ✅ ATUALIZA diretamente (já está hashada)
+        await db.collection("users").updateOne(
+            { _id: usuario._id },
+            { 
+                $set: { 
+                    senha: novaSenha, // Já veio hashada do Wix
+                    atualizadoEm: new Date()
+                }
+            }
+        );
+
+        console.log("✅ Senha redefinida para:", email);
+        
+        res.json({ 
+            sucesso: true, 
+            mensagem: "Senha redefinida com sucesso!" 
+        });
+
+    } catch (err) {
+        console.error("❌ Erro ao redefinir senha:", err);
+        res.status(500).json({ 
+            sucesso: false, 
+            mensagem: "Erro interno ao redefinir senha" 
+        });
+    }
+});
+
 // POST - Criar novo usuário COM validação
 app.post("/users", async (req, res) => {
   try {
