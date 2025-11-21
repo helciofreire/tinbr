@@ -392,19 +392,19 @@ app.get("/users/:id", async (req, res) => {
   }
 });
 
-// POST - Redefinir senha (já recebe hashada)
 app.post("/recuperacao/redefinir-senha", async (req, res) => {
     try {
-        const { email, novaSenha } = req.body; // novaSenha já está hashada
+        console.log("🔍 Dados recebidos:", req.body);
+        
+        const { email, novaSenha } = req.body;
         
         if (!email || !novaSenha) {
             return res.status(400).json({ 
                 sucesso: false, 
-                mensagem: "Email e nova senha são obrigatórios" 
+                mensagem: "❌ Dados incompletos." 
             });
         }
 
-        // Busca usuário
         const usuario = await db.collection("users").findOne({ 
             email: email.toLowerCase().trim()
         });
@@ -412,33 +412,33 @@ app.post("/recuperacao/redefinir-senha", async (req, res) => {
         if (!usuario) {
             return res.status(404).json({ 
                 sucesso: false, 
-                mensagem: "Usuário não encontrado" 
+                mensagem: "❌ Usuário não encontrado." 
             });
         }
 
-        // ✅ ATUALIZA diretamente (já está hashada)
+        // ✅ ATUALIZA senha E atualizadoEm no formato ISO
         await db.collection("users").updateOne(
             { _id: usuario._id },
             { 
                 $set: { 
-                    senha: novaSenha, // Já veio hashada do Wix
-                    atualizadoEm: new Date()
+                    senha: novaSenha,
+                    atualizadoEm: new Date().toISOString() // ✅ Formato "2025-11-15T15:02:22.970Z"
                 }
             }
         );
 
-        console.log("✅ Senha redefinida para:", email);
+        console.log("✅ Senha e atualizadoEm atualizados com sucesso!");
         
         res.json({ 
             sucesso: true, 
-            mensagem: "Senha redefinida com sucesso!" 
+            mensagem: "✅ Senha redefinida com sucesso!" 
         });
 
     } catch (err) {
-        console.error("❌ Erro ao redefinir senha:", err);
+        console.error("❌ ERRO DETALHADO:", err);
         res.status(500).json({ 
             sucesso: false, 
-            mensagem: "Erro interno ao redefinir senha" 
+            mensagem: "❌ Erro interno ao redefinir senha" 
         });
     }
 });
