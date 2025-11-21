@@ -294,6 +294,38 @@ app.delete("/clientes/:id", async (req, res) => {
 
 // ======================= USERS COM SEGURANÇA =======================
 
+// GET - Buscar usuário APENAS pelo email (para recuperação de senha)
+app.get("/users/email/:email", async (req, res) => {
+    try {
+        const email = req.params.email;
+        
+        if (!email) {
+            return res.status(400).json({ erro: "Email é obrigatório" });
+        }
+
+        const user = await db.collection("users").findOne({ 
+            email: email.toLowerCase().trim()
+        });
+
+        if (!user) {
+            return res.status(404).json({ erro: "Usuário não encontrado" });
+        }
+
+        // ✅ Retorna apenas dados necessários para recuperação (sem senha)
+        const { senha, ...userSemSenha } = user;
+        
+        res.json({
+            sucesso: true,
+            usuario: userSemSenha,
+            mensagem: "Usuário encontrado"
+        });
+
+    } catch (err) {
+        console.error("Erro ao buscar usuário por email:", err);
+        res.status(500).json({ erro: "Erro ao buscar usuário" });
+    }
+});
+
 // GET - Listar usuários APENAS do cliente
 app.get("/users", async (req, res) => {
   try {
