@@ -367,6 +367,41 @@ app.get("/users", async (req, res) => {
   }
 });
 
+// GET - Buscar usuário por documento COM verificação de cliente
+app.get("/users/documento/:documento", async (req, res) => {
+  try {
+    const documento = req.params.documento;
+    const { cliente_id } = req.query;
+    
+    console.log("🔍 Buscando usuário por documento:", documento, "cliente_id:", cliente_id);
+    
+    if (!cliente_id) {
+      return res.status(400).json({ erro: "cliente_id é obrigatório na query" });
+    }
+    
+    if (!documento) {
+      return res.status(400).json({ erro: "Documento é obrigatório" });
+    }
+
+    // ✅ Busca pelo documento (CPF/CNPJ) E verifica se pertence ao cliente
+    const user = await db.collection("users").findOne({ 
+      documento: documento,
+      cliente_id: cliente_id // ✅ Só retorna se pertencer ao cliente
+    });
+    
+    if (!user) {
+      return res.status(404).json({ erro: "Usuário não encontrado" });
+    }
+    
+    console.log("✅ Usuário encontrado:", user.nome);
+    res.json(user);
+    
+  } catch (err) {
+    console.error("Erro ao buscar usuário por documento:", err);
+    res.status(500).json({ erro: "Erro ao buscar usuário" });
+  }
+});
+
 // GET - Buscar um usuário por ID COM verificação de cliente
 app.get("/users/:id", async (req, res) => {
   try {
