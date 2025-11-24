@@ -89,6 +89,42 @@ app.get("/proprietarios/:id", async (req, res) => {
   }
 });
 
+// GET - Buscar proprietário por documento COM verificação de cliente
+app.get("/proprietarios/documento/:documento", async (req, res) => {
+  try {
+    const documento = req.params.documento;
+    const { cliente_id } = req.query;
+    
+    console.log("🔍 Buscando proprietário por documento:", documento, "cliente_id:", cliente_id);
+    
+    if (!cliente_id) {
+      return res.status(400).json({ erro: "cliente_id é obrigatório na query" });
+    }
+    
+    if (!documento) {
+      return res.status(400).json({ erro: "Documento é obrigatório" });
+    }
+
+    // ✅ Busca pelo documento (CPF/CNPJ) E verifica se pertence ao cliente
+    const proprietario = await db.collection("proprietarios").findOne({ 
+      documento: documento,
+      cliente_id: cliente_id // ✅ Só retorna se pertencer ao cliente
+    });
+    
+    if (!proprietario) {
+      return res.status(404).json({ erro: "Proprietário não encontrado" });
+    }
+    
+    console.log("✅ Usuário encontrado:", proprietario.nome);
+    res.json(proprietario);
+    
+  } catch (err) {
+    console.error("Erro ao buscar proprietário por documento:", err);
+    res.status(500).json({ erro: "Erro ao buscar proprietário" });
+  }
+});
+
+
 // POST - Criar novo proprietário COM cliente_id
 app.post("/proprietarios", async (req, res) => {
   try {
