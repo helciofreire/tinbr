@@ -89,6 +89,31 @@ app.get("/proprietarios/:id", async (req, res) => {
   }
 });
 
+// GET - Buscar proprietário por CPF do responsável COM verificação de cliente
+app.get("/proprietarios/responsavel/:cpfresp", async (req, res) => {
+  try {
+    const cpfresp = req.params.cpfresp;
+    const { cliente_id } = req.query;
+    
+    if (!cliente_id) {
+      return res.status(400).json({ erro: "cliente_id é obrigatório na query" });
+    }
+    
+    const proprietario = await db.collection("proprietarios").findOne({ 
+      cpfresp: cpfresp,
+      cliente_id: cliente_id // ✅ Só retorna se pertencer ao cliente
+    });
+    
+    if (!proprietario) {
+      return res.status(404).json({ erro: "Proprietário não encontrado para este CPF de responsável" });
+    }
+    
+    res.json(proprietario);
+  } catch (err) {
+    res.status(500).json({ erro: "Erro ao buscar proprietário por responsável" });
+  }
+});
+
 // GET - Buscar proprietário por documento COM verificação de cliente
 app.get("/proprietarios/documento/:documento", async (req, res) => {
   try {
