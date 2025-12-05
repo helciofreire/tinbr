@@ -42,6 +42,71 @@ function senhaValida(senha) {
   const regex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
   return regex.test(senha);
 }
+
+// ======================= COTAÇÕES =======================
+
+// POST - Salvar cotação do dólar
+app.post("/cotacoes", async (req, res) => {
+  try {
+    const { data, valor } = req.body;
+
+    if (!data || !valor) {
+      return res.status(400).json({ erro: "Campos obrigatórios: data e valor" });
+    }
+
+    // Verifica se já existe para evitar duplicidade
+    const existente = await db.collection("cotacoes").findOne({ data });
+
+    if (existente) {
+      return res.json({
+        mensagem: "Cotação já registrada para esta data",
+        cotacao: existente
+      });
+    }
+
+    const nova = {
+      data,
+      valor,
+      criadoEm: new Date()
+    };
+
+    const resultado = await db.collection("cotacoes").insertOne(nova);
+
+    res.json({
+      sucesso: true,
+      mensagem: "Cotação salva com sucesso",
+      _id: resultado.insertedId
+    });
+
+  } catch (err) {
+    console.error("❌ Erro ao salvar cotação:", err);
+    res.status(500).json({ erro: "Erro ao salvar cotação" });
+  }
+});
+
+// GET - Última cotação
+app.get("/cotacoes/ultima", async (req, res) => {
+  try {
+    const ultima = await db.collection("cotacoes")
+      .find()
+      .sort({ data: -1 })
+      .limit(1)
+      .toArray();
+
+    if (!ultima || ultima.length === 0) {
+      return res.status(404).json({ erro: "Nenhuma cotação encontrada" });
+    }
+
+    res.json(ultima[0]);
+
+  } catch (err) {
+    console.error("Erro ao buscar última cotação:", err);
+    res.status(500).json({ erro: "Erro ao buscar última cotação" });
+  }
+});
+
+
+
 // ======================= PROPRIETÁRIOS COM SEGURANÇA =======================
 
 // GET - Listar proprietários APENAS do cliente
@@ -1116,10 +1181,10 @@ app.delete("/tks/:id", async (req, res) => {
   }
 });
 
-// ======================= REFERENCIA COM SEGURANÇA =======================
+// ======================= PROPRIEDADES COM SEGURANÇA =======================
 
-// GET - Listar referencia APENAS do cliente
-app.get("/referencia", async (req, res) => {
+// GET - Listar propriedades APENAS do cliente
+app.get("/propriedades", async (req, res) => {
   try {
     const { cliente_id, limit = 1000, sort } = req.query;
     
@@ -1142,19 +1207,19 @@ app.get("/referencia", async (req, res) => {
       options.sort = sortFields;
     }
     
-    const referencia = await db.collection("referencia")
+    const propriedades = await db.collection("propriedades")
       .find(filter, options)
       .toArray();
       
-    res.json(referencia);
+    res.json(propriedades);
   } catch (err) {
-    console.error("Erro ao buscar referencia:", err);
-    res.status(500).json({ erro: "Erro ao buscar referencia" });
+    console.error("Erro ao buscar propriedades:", err);
+    res.status(500).json({ erro: "Erro ao buscar propriedade" });
   }
 });
 
-// GET - Buscar um referencia por ID COM verificação de cliente
-app.get("/referencia/:id", async (req, res) => {
+// GET - Buscar propriedade por ID COM verificação de cliente
+app.get("/propriedades/:id", async (req, res) => {
   try {
     const id = req.params.id;
     const { cliente_id } = req.query;
@@ -1163,23 +1228,50 @@ app.get("/referencia/:id", async (req, res) => {
       return res.status(400).json({ erro: "cliente_id é obrigatório na query" });
     }
     
-    const referencia = await db.collection("referencia").findOne({ 
+    const propriedades = await db.collection("propriedades").findOne({ 
       _id: id,
       cliente_id: cliente_id
     });
     
-    if (!referencia) {
-      return res.status(404).json({ erro: "Referencia não encontrado" });
+    if (!propriedades) {
+      return res.status(404).json({ erro: "Propriedade não encontrada" });
     }
     
-    res.json(referencia);
+    res.json(propriedades);
   } catch (err) {
-    res.status(500).json({ erro: "Erro ao buscar referencia" });
+    res.status(500).json({ erro: "Erro ao buscar propriedade" });
   }
 });
 
-// POST - Criar novo referencia COM validação
-app.post("/referencia", async (req, res) => {
+// GET - Buscar propriedades por proprietario_id E cliente_id
+app.get("/propriedades", async (req, res) => {
+  try {
+    const { proprietario_id, cliente_id } = req.query;
+    
+    // Validações
+    if (!proprietario_id || !cliente_id) {
+      return res.status(400).json({ 
+        erro: "proprietario_id e cliente_id são obrigatórios na query" 
+      });
+    }
+    
+    // Busca no MongoDB
+    const propriedades = await db.collection("propriedades").find({ 
+      proprietario_id: proprietario_id,
+      cliente_id: cliente_id
+    }).toArray();
+    
+    // Retorna resultado (pode ser array vazio)
+    res.json(propriedades);
+    
+  } catch (err) {
+    console.error("Erro ao buscar propriedades:", err);
+    res.status(500).json({ erro: "Erro interno ao buscar propriedades" });
+  }
+});
+
+// POST - Criar nova propriedade COM validação
+app.post("/propriedades", async (req, res) => {
   try {
     const dados = req.body;
     
@@ -1190,7 +1282,7 @@ app.post("/referencia", async (req, res) => {
     // ✅ CORREÇÃO: Definir um campo único específico ou remover a validação
     // Exemplo se tiver campo "codigo" único:
     if (dados.codigo) {
-      const existente = await db.collection("referencia").findOne({
+      const existente = await db.collection("propriedades").findOne({
         codigo: dados.codigo,
         cliente_id: dados.cliente_id
       });
@@ -1205,21 +1297,21 @@ app.post("/referencia", async (req, res) => {
     dados.criadoEm = new Date();
     dados.atualizadoEm = new Date();
     
-    const resultado = await db.collection("referencia").insertOne(dados);
+    const resultado = await db.collection("propriedades").insertOne(dados);
     
     res.json({ 
       sucesso: true, 
       _id: resultado.insertedId,
-      mensagem: "Referencia criado com sucesso"
+      mensagem: "Propriedades criada com sucesso"
     });
     
   } catch (err) {
-    res.status(500).json({ erro: "Erro ao criar referencia" });
+    res.status(500).json({ erro: "Erro ao criar propriedade" });
   }
 });
 
-// PUT - Atualizar referencia COM verificação de cliente
-app.put("/referencia/:id", async (req, res) => {
+// PUT - Atualizar propriedades COM verificação de cliente
+app.put("/propriedades/:id", async (req, res) => {
   try {
     const id = req.params.id;
     const dados = req.body;
@@ -1235,7 +1327,7 @@ app.put("/referencia/:id", async (req, res) => {
     
     // ✅ CORREÇÃO: Definir campo único específico
     if (camposParaAtualizar.codigo) {
-      const existente = await db.collection("referencia").findOne({
+      const existente = await db.collection("propriedades").findOne({
         codigo: camposParaAtualizar.codigo,
         cliente_id: cliente_id,
         _id: { $ne: id }
@@ -1246,7 +1338,7 @@ app.put("/referencia/:id", async (req, res) => {
       }
     }
     
-    const resultado = await db.collection("referencia").updateOne(
+    const resultado = await db.collection("propriedades").updateOne(
       { 
         _id: id,
         cliente_id: cliente_id
@@ -1255,21 +1347,21 @@ app.put("/referencia/:id", async (req, res) => {
     );
     
     if (resultado.matchedCount === 0) {
-      return res.status(404).json({ erro: "Referencia não encontrado" });
+      return res.status(404).json({ erro: "Propriedades não encontrada" });
     }
     
     res.json({ 
       sucesso: true, 
-      mensagem: "Referencia atualizado com sucesso"
+      mensagem: "Propriedade atualizada com sucesso"
     });
     
   } catch (err) {
-    res.status(500).json({ erro: "Erro ao atualizar referencia" });
+    res.status(500).json({ erro: "Erro ao atualizar propriedades" });
   }
 });
 
-// DELETE - Remover referencia COM verificação de cliente
-app.delete("/referencia/:id", async (req, res) => {
+// DELETE - Remover propriedades COM verificação de cliente
+app.delete("/propriedades/:id", async (req, res) => {
   try {
     const id = req.params.id;
     const { cliente_id } = req.query;
@@ -1278,22 +1370,22 @@ app.delete("/referencia/:id", async (req, res) => {
       return res.status(400).json({ erro: "cliente_id é obrigatório na query" });
     }
     
-    const resultado = await db.collection("referencia").deleteOne({ 
+    const resultado = await db.collection("propriedades").deleteOne({ 
       _id: id,
       cliente_id: cliente_id
     });
     
     if (resultado.deletedCount === 0) {
-      return res.status(404).json({ erro: "Referencia não encontrado" });
+      return res.status(404).json({ erro: "Propriedade não encontrada" });
     }
     
     res.json({ 
       sucesso: true, 
-      mensagem: "Referencia excluído com sucesso"
+      mensagem: "Propriedades excluída com sucesso"
     });
     
   } catch (err) {
-    res.status(500).json({ erro: "Erro ao remover referencia" });
+    res.status(500).json({ erro: "Erro ao remover propriedades" });
   }
 });
 // ======================= OPERACOES COM SEGURANÇA =======================
