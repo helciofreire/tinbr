@@ -7,7 +7,7 @@ export function iniciarCronJobs(db) {
   console.log("⏳ Iniciando cron jobs...");
 
   // Rodar todos os dias às 09:00 da manhã
-  cron.schedule("*/5 * * * *", async () => {
+  cron.schedule("30 8 * * *", async () => {
     console.log("🔔 Executando tarefa diária: atualizar cotação do dólar");
 
     const cotacao = await obterUltimaCotacaoBCB();
@@ -30,3 +30,4 @@ export function iniciarCronJobs(db) {
     }
   });
 }
+
