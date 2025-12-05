@@ -16,11 +16,11 @@ export function iniciarCronJobs(db) {
       return;
     }
 
-    const registro = {
-      data: cotacao.data,
-      valor: cotacao.valor,
-      criadoEm: new Date()
-    };
+    const registro = { 
+  data: cotacao.data,
+  valor: Number(Number(cotacao.valor).toFixed(2)),
+  criadoEm: new Date()
+};
 
     try {
       const resultado = await db.collection("cotacoes").insertOne(registro);
