@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import bcrypt from "bcrypt";
 import { MongoClient, ObjectId } from "mongodb";
+import { iniciarCronJobs } from "./cron-jobs.js";
 
 // ----------------------------------------
 // Configuração Express
@@ -22,12 +23,7 @@ async function conectarBanco() {
     db = client.db(process.env.MONGO_DB);
     console.log("✅ MongoDB conectado:", process.env.MONGO_DB);
 
-    // Índices mínimos
-    //await db.collection("users").createIndex({ email: 1 }, { unique: true });
-    //await db.collection("users").createIndex({ documento: 1 }, { unique: true });
-    //await db.collection("clientes").createIndex({ cliente_id: 1 }, { unique: true });
-
-    console.log("✅ Índices garantidos (users + clientes)");
+    iniciarCronJobs(db);
 
   } catch (erro) {
     console.error("❌ Erro ao conectar banco:", erro);
