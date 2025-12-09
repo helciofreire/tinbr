@@ -1187,32 +1187,34 @@ app.get("/propriedades", async (req, res) => {
     if (!cliente_id) {
       return res.status(400).json({ erro: "cliente_id é obrigatório na query" });
     }
-    
-    let filter = { cliente_id: cliente_id };
-    
-    const options = {
-      limit: parseInt(limit)
-    };
-    
+
+    let filter = { cliente_id };
+
+    const cursor = db.collection("propriedades").find(filter);
+
+    // LIMIT
+    cursor.limit(parseInt(limit));
+
+    // SORT opcional
     if (sort) {
       const sortFields = sort.split(',').reduce((acc, field) => {
         const [fieldName, order] = field.split(':');
         acc[fieldName] = order === 'desc' ? -1 : 1;
         return acc;
       }, {});
-      options.sort = sortFields;
+      cursor.sort(sortFields);
     }
-    
-    const propriedades = await db.collection("propriedades")
-      .find(filter, options)
-      .toArray();
-      
+
+    const propriedades = await cursor.toArray();
+
     res.json(propriedades);
+
   } catch (err) {
     console.error("Erro ao buscar propriedades:", err);
-    res.status(500).json({ erro: "Erro ao buscar propriedade" });
+    res.status(500).json({ erro: "Erro ao buscar propriedades" });
   }
 });
+
 
 // GET - Buscar propriedade por ID COM verificação de cliente
 app.get("/propriedades/:id", async (req, res) => {
@@ -1265,6 +1267,35 @@ app.get("/propriedades", async (req, res) => {
     res.status(500).json({ erro: "Erro interno ao buscar propriedades" });
   }
 });
+
+// GET - Buscar propriedade específica por ID, pertencente ao cliente e ao proprietário
+app.get("/propriedades/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { cliente_id, proprietario_id } = req.query;
+
+    if (!cliente_id || !proprietario_id) {
+      return res.status(400).json({ erro: "cliente_id e proprietario_id são obrigatórios na query" });
+    }
+
+    const propriedade = await db.collection("propriedades").findOne({
+      _id: id,
+      cliente_id: cliente_id,
+      proprietario_id: proprietario_id
+    });
+
+    if (!propriedade) {
+      return res.status(404).json({ erro: "Propriedade não encontrada ou não pertence ao cliente/proprietário" });
+    }
+
+    res.json(propriedade);
+
+  } catch (err) {
+    console.error("Erro ao buscar propriedade:", err);
+    res.status(500).json({ erro: "Erro ao buscar propriedade" });
+  }
+});
+
 
 // POST - Criar nova propriedade COM validação
 app.post("/propriedades", async (req, res) => {
@@ -1356,6 +1387,155 @@ app.put("/propriedades/:id", async (req, res) => {
   }
 });
 
+//GET LISTAR PROPRIEDADES POR CLIENTE E PROPRIETÁRIO
+
+app.get("/propriedades", async (req, res) => {
+  try {
+    const { cliente_id, proprietario_id } = req.query;
+
+    if (!cliente_id) {
+      return res.status(400).json({ erro: "cliente_id é obrigatório." });
+    }
+    if (!proprietario_id) {
+      return res.status(400).json({ erro: "proprietario_id é obrigatório." });
+    }
+
+    console.log("📌 GET /propriedades", { cliente_id, proprietario_id });
+
+    const propriedades = await Propriedades.find({
+      cliente_id: String(cliente_id),
+      proprietario_id: String(proprietario_id)
+    }).lean();
+
+    if (!propriedades || propriedades.length === 0) {
+      return res.status(404).json({ erro: "Nenhuma propriedade encontrada." });
+    }
+
+    return res.json(propriedades);
+
+  } catch (erro) {
+    console.error("💥 Erro GET /propriedades:", erro);
+    return res.status(500).json({ erro: "Erro interno ao buscar propriedades." });
+  }
+});
+
+//PUT ATUALIZAR PROPRIEDADESCOM CLIENTE_ID E PROPRIETARIO_ID
+
+app.put("/propriedades/:id", async (req, res) => {
+  try {
+    const id = req.params.id;
+    const { cliente_id, proprietario_id } = req.query;
+
+    if (!cliente_id || !proprietario_id) {
+      return res.status(400).json({
+        erro: "cliente_id e proprietario_id são obrigatórios na query."
+      });
+    }
+
+    console.log("📌 PUT /propriedades/:id", {
+      id,
+      cliente_id,
+      proprietario_id,
+      body: req.body
+    });
+
+    // 1) Buscar propriedade existente
+    const existente = await Propriedades.findOne({
+      _id: id,
+      cliente_id: String(cliente_id),
+      proprietario_id: String(proprietario_id)
+    });
+
+    if (!existente) {
+      return res.status(404).json({
+        erro: "Propriedade não encontrada para esse cliente/proprietário."
+      });
+    }
+
+    const dados = req.body;
+    const alteracoes = {};
+
+    // Campos numéricos comuns
+    const camposNumericos = [
+      "valor", "dolar", "valordolar", "valordolaratual",
+      "valortin", "tokenqtd", "tokenreal", "tokenunit"
+    ];
+
+    // Campos de data
+    const camposData = [
+      "datainclusao", "dataatualizacao",
+      "datacotacao", "datacotacaoatual"
+    ];
+
+    // 2) Campo a campo
+    for (const campo in dados) {
+      if (!Object.prototype.hasOwnProperty.call(dados, campo)) continue;
+
+      let novoValor = dados[campo];
+      let antigoValor = existente[campo];
+
+      // Ignorar valores vazios
+      if (
+        (novoValor === undefined || novoValor === null || novoValor === "") &&
+        (antigoValor === undefined || antigoValor === null || antigoValor === "")
+      ) continue;
+
+      // Números
+      if (camposNumericos.includes(campo)) {
+        if (typeof novoValor === "string") {
+          novoValor = Number(
+            novoValor.replace(/\./g, "").replace(",", ".")
+          );
+        }
+      }
+
+      // Datas
+      if (camposData.includes(campo)) {
+        const d = new Date(novoValor);
+        if (!isNaN(d.getTime())) novoValor = d;
+      }
+
+      // Documentos
+      if (campo === "cnm" && typeof novoValor === "string") {
+        novoValor = novoValor.replace(/\D/g, "");
+      }
+
+      const nvStr = String(novoValor ?? "");
+      const avStr = String(antigoValor ?? "");
+
+      if (nvStr !== avStr) {
+        existente[campo] = novoValor;
+        alteracoes[campo] = { de: antigoValor, para: novoValor };
+      }
+    }
+
+    if (Object.keys(alteracoes).length === 0) {
+      return res.json({
+        sucesso: false,
+        mensagem: "Nenhum campo alterado.",
+        alteracoes: null
+      });
+    }
+
+    existente.dataatualizacao = new Date();
+
+    // 3) Salvar
+    await existente.save();
+
+    return res.json({
+      sucesso: true,
+      mensagem: "Propriedade atualizada com sucesso.",
+      alteracoes,
+      propriedade: existente
+    });
+
+  } catch (erro) {
+    console.error("💥 Erro PUT /propriedades/:id:", erro);
+    return res.status(500).json({ erro: "Erro interno ao atualizar propriedade." });
+  }
+});
+
+
 // DELETE - Remover propriedades COM verificação de cliente
 app.delete("/propriedades/:id", async (req, res) => {
   try {
@@ -1384,6 +1564,33 @@ app.delete("/propriedades/:id", async (req, res) => {
     res.status(500).json({ erro: "Erro ao remover propriedades" });
   }
 });
+
+//========================= DOLAR==========
+
+// GET - Retornar a cotação mais recente
+app.get("/cotacoes/ultima", async (req, res) => {
+  try {
+    const ultima = await db
+      .collection("cotacoes")
+      .find({})
+      .sort({ data: -1 }) // ordena pela mais recente
+      .limit(1)
+      .toArray();
+
+    if (!ultima.length) {
+      return res.status(404).json({ erro: "Nenhuma cotação encontrada" });
+    }
+
+    res.json(ultima[0]);
+
+  } catch (err) {
+    console.error("Erro ao buscar última cotação:", err);
+    res.status(500).json({ erro: "Erro ao buscar última cotação" });
+  }
+});
+
+
+
 // ======================= OPERACOES COM SEGURANÇA =======================
 
 // GET - Listar operacoes APENAS do cliente
