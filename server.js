@@ -1296,6 +1296,53 @@ app.get("/propriedades/:id", async (req, res) => {
   }
 });
 
+// GET - Listar municípios únicos das propriedades do cliente (ordenado por UF -> Município)
+app.get("/propriedades/municipios", async (req, res) => {
+  try {
+    const { cliente_id } = req.query;
+    if (!cliente_id) return res.status(400).json({ erro: "cliente_id é obrigatório na query" });
+
+    const pipeline = [
+      { $match: { cliente_id } },
+
+      // Agrupa para eliminar duplicatas
+      {
+        $group: {
+          _id: { uf: "$uf", municipio: "$municipio", ibge: "$ibge" }
+        }
+      },
+
+      // Traz campos separados para ordenar corretamente
+      {
+        $project: {
+          _id: 0,
+          uf: "$_id.uf",
+          municipio: "$_id.municipio",
+          ibge: "$_id.ibge"
+        }
+      },
+
+      // Ordena primeiro por UF, depois por município
+      { $sort: { uf: 1, municipio: 1 } },
+
+      // Formata o campo final conforme desejado
+      {
+        $project: {
+          municipio: { $concat: ["$uf", " - ", "$municipio"] },
+          ibge: 1
+        }
+      }
+    ];
+
+    const municipios = await db.collection("propriedades").aggregate(pipeline).toArray();
+    res.json(municipios);
+  } catch (err) {
+    console.error("Erro ao buscar municípios:", err);
+    res.status(500).json({ erro: "Erro ao buscar municípios" });
+  }
+});
+
+
 
 // POST - Criar nova propriedade COM validação
 app.post("/propriedades", async (req, res) => {
