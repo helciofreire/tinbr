@@ -1179,7 +1179,11 @@ app.delete("/tks/:id", async (req, res) => {
 
 // ======================= PROPRIEDADES COM SEGURANÇA =======================
 
-// GET - Listar municípios únicos das propriedades do cliente (ordenado por UF -> Município)
+// ------------------------------------------------------------
+// ROTAS PROPRIEDADES (ordem correta)
+// ------------------------------------------------------------
+
+// 1️⃣ LISTAR MUNICÍPIOS ÚNICOS DO CLIENTE
 app.get("/propriedades/municipios", async (req, res) => {
   try {
     const { cliente_id } = req.query;
@@ -1187,28 +1191,15 @@ app.get("/propriedades/municipios", async (req, res) => {
 
     const pipeline = [
       { $match: { cliente_id } },
-
-      // Agrupa para eliminar duplicatas
       {
         $group: {
           _id: { uf: "$uf", municipio: "$municipio", ibge: "$ibge" }
         }
       },
-
-      // Traz campos separados para ordenar corretamente
       {
-        $project: {
-          _id: 0,
-          uf: "$_id.uf",
-          municipio: "$_id.municipio",
-          ibge: "$_id.ibge"
-        }
+        $project: { _id: 0, uf: "$_id.uf", municipio: "$_id.municipio", ibge: "$_id.ibge" }
       },
-
-      // Ordena primeiro por UF, depois por município
       { $sort: { uf: 1, municipio: 1 } },
-
-      // Formata o campo final conforme desejado
       {
         $project: {
           municipio: { $concat: ["$uf", " - ", "$municipio"] },
@@ -1219,6 +1210,7 @@ app.get("/propriedades/municipios", async (req, res) => {
 
     const municipios = await db.collection("propriedades").aggregate(pipeline).toArray();
     res.json(municipios);
+
   } catch (err) {
     console.error("Erro ao buscar municípios:", err);
     res.status(500).json({ erro: "Erro ao buscar municípios" });
@@ -1226,7 +1218,7 @@ app.get("/propriedades/municipios", async (req, res) => {
 });
 
 
-// GET - Listar propriedades APENAS do cliente
+// 2️⃣ LISTAR TODAS AS PROPRIEDADES DO CLIENTE
 app.get("/propriedades", async (req, res) => {
   try {
     const { cliente_id, limit = 1000, sort } = req.query;
@@ -1236,13 +1228,10 @@ app.get("/propriedades", async (req, res) => {
     }
 
     let filter = { cliente_id };
-
     const cursor = db.collection("propriedades").find(filter);
 
-    // LIMIT
     cursor.limit(parseInt(limit));
 
-    // SORT opcional
     if (sort) {
       const sortFields = sort.split(',').reduce((acc, field) => {
         const [fieldName, order] = field.split(':');
@@ -1253,7 +1242,6 @@ app.get("/propriedades", async (req, res) => {
     }
 
     const propriedades = await cursor.toArray();
-
     res.json(propriedades);
 
   } catch (err) {
@@ -1263,109 +1251,78 @@ app.get("/propriedades", async (req, res) => {
 });
 
 
-// GET - Buscar propriedade por ID COM verificação de cliente
-app.get("/propriedades/:id", async (req, res) => {
+// 3️⃣ LISTAR PROPRIEDADES POR MUNICÍPIO
+app.get("/propriedades/municipio", async (req, res) => {
   try {
-    const id = req.params.id;
-    const { cliente_id } = req.query;
-    
-    if (!cliente_id) {
-      return res.status(400).json({ erro: "cliente_id é obrigatório na query" });
-    }
-    
-    const propriedades = await db.collection("propriedades").findOne({ 
-      _id: id,
-      cliente_id: cliente_id
-    });
-    
-    if (!propriedades) {
-      return res.status(404).json({ erro: "Propriedade não encontrada" });
-    }
-    
+    const { ibge, cliente_id } = req.query;
+
+    if (!ibge) return res.status(400).json({ erro: "ibge é obrigatório" });
+    if (!cliente_id) return res.status(400).json({ erro: "cliente_id é obrigatório" });
+
+    const propriedades = await db
+      .collection("propriedades")
+      .find({ ibge, cliente_id })
+      .sort({ municipio: 1 })
+      .toArray();
+
     res.json(propriedades);
+
   } catch (err) {
-    res.status(500).json({ erro: "Erro ao buscar propriedade" });
+    console.error("Erro ao buscar propriedades por Município:", err);
+    res.status(500).json({ erro: "Erro ao buscar propriedades por Município" });
   }
 });
 
-// GET - Buscar propriedades por proprietario_id E cliente_id
-app.get("/propriedades", async (req, res) => {
+
+// 4️⃣ LISTAR PROPRIEDADES POR PROPRIETÁRIO + CLIENTE
+app.get("/propriedades-por-proprietario", async (req, res) => {
   try {
     const { proprietario_id, cliente_id } = req.query;
     
-    // Validações
     if (!proprietario_id || !cliente_id) {
       return res.status(400).json({ 
         erro: "proprietario_id e cliente_id são obrigatórios na query" 
       });
     }
-    
-    // Busca no MongoDB
-    const propriedades = await db.collection("propriedades").find({ 
-      proprietario_id: proprietario_id,
-      cliente_id: cliente_id
+
+    const propriedades = await db.collection("propriedades").find({
+      proprietario_id,
+      cliente_id
     }).toArray();
-    
-    // Retorna resultado (pode ser array vazio)
+
     res.json(propriedades);
-    
+
   } catch (err) {
     console.error("Erro ao buscar propriedades:", err);
     res.status(500).json({ erro: "Erro interno ao buscar propriedades" });
   }
 });
 
-// GET - Buscar propriedade específica por ID, pertencente ao cliente e ao proprietário
+
+// 5️⃣ ÚLTIMA ROTA — BUSCAR PROPRIEDADE POR ID (sempre por último!)
 app.get("/propriedades/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const { cliente_id, proprietario_id } = req.query;
+    const { cliente_id } = req.query;
 
-    if (!cliente_id || !proprietario_id) {
-      return res.status(400).json({ erro: "cliente_id e proprietario_id são obrigatórios na query" });
+    if (!cliente_id) {
+      return res.status(400).json({ erro: "cliente_id é obrigatório na query" });
     }
 
     const propriedade = await db.collection("propriedades").findOne({
       _id: id,
-      cliente_id: cliente_id,
-      proprietario_id: proprietario_id
+      cliente_id
     });
 
     if (!propriedade) {
-      return res.status(404).json({ erro: "Propriedade não encontrada ou não pertence ao cliente/proprietário" });
+      return res.status(404).json({ erro: "Propriedade não encontrada" });
     }
 
     res.json(propriedade);
 
   } catch (err) {
-    console.error("Erro ao buscar propriedade:", err);
-    res.status(500).json({ erro: "Erro ao buscar propriedade" });
-  }
-});
-
-
-// GET - Lista propriedades por município
-app.get("/propriedades/municipio", async (req, res) => {
-  try {
-    const { ibge, cliente_id } = req.query;
-
-    if (!ibge) {
-      return res.status(400).json({ erro: "ibge é obrigatório" });
-    }
-    if (!cliente_id) {
-      return res.status(400).json({ erro: "cliente_id é obrigatório" });
-    }
-
-    const propriedades = await db
-      .collection("propriedades")
-      .find({ ibge, cliente_id })
-      .sort({ municipio: 1 }) // opcional
-      .toArray();
-
-    res.json(propriedades);
-  } catch (err) {
-    console.error("Erro ao buscar propriedades por Município:", err);
-    res.status(500).json({ erro: "Erro ao buscar propriedades por Município" });
+    console.error("Erro ao buscar propriedade por ID:", err);
+    res.status(500).json({ erro: "Erro ao buscar propriedade por ID" });
   }
 });
 
