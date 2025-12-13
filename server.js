@@ -1182,6 +1182,263 @@ app.delete("/tks/:id", async (req, res) => {
 // ------------------------------------------------------------
 // ROTAS PROPRIEDADES (ordem correta)
 // ------------------------------------------------------------
+// LISTAR CATEGORIAS POR CLIENTE
+app.get("/propriedades/categorias", async (req, res) => {
+  try {
+    const { cliente_id } = req.query;
+    if (!cliente_id)
+      return res.status(400).json({ erro: "cliente_id é obrigatório" });
+
+    const pipeline = [
+      { $match: { cliente_id } },
+      {
+        $group: {
+          _id: "$categoria"
+        }
+      },
+      { $sort: { _id: 1 } },
+      {
+        $project: {
+          _id: 0,
+          value: "$_id",
+          label: {
+            $concat: [
+              { $toUpper: { $substrCP: ["$_id", 0, 1] } },
+              { $substrCP: ["$_id", 1, { $strLenCP: "$_id" }] }
+            ]
+          }
+        }
+      }
+    ];
+
+    const categorias = await db
+      .collection("propriedades")
+      .aggregate(pipeline)
+      .toArray();
+
+    res.json(categorias);
+
+  } catch (err) {
+    console.error("Erro ao buscar categorias:", err);
+    res.status(500).json({ erro: "Erro ao buscar categorias" });
+  }
+});
+
+//===========================CATEGORIAS POR CLIENTE E MUNICIPIO====================
+app.get("/propriedades/categorias", async (req, res) => {
+  try {
+    const { cliente_id, municipio } = req.query;
+    if (!cliente_id)
+      return res.status(400).json({ erro: "cliente_id é obrigatório" });
+
+    const pipeline = [
+      { $match: { cliente_id, municipio } },
+      {
+        $group: {
+          _id: "$categoria"
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          label: {
+            $concat: [
+              { $toUpper: { $substrCP: ["$_id", 0, 1] } },
+              { $substrCP: ["$_id", 1, { $strLenCP: "$_id" }] }
+            ]
+          },
+          value: "$_id"
+        }
+      },
+      { $sort: { label: 1 } }
+    ];
+
+    const categorias = await db
+      .collection("propriedades")
+      .aggregate(pipeline)
+      .toArray();
+
+    res.json(categorias);
+
+  } catch (err) {
+    console.error("Erro ao buscar categorias:", err);
+    res.status(500).json({ erro: "Erro ao buscar categorias" });
+  }
+});
+
+// ======================= TIPOS DE PROPRIEDADE POR CLIENTE=======================
+app.get("/propriedades/tipos", async (req, res) => {
+  try {
+    const { cliente_id } = req.query;
+    if (!cliente_id)
+      return res.status(400).json({ erro: "cliente_id é obrigatório" });
+
+    const pipeline = [
+      { $match: { cliente_id } },
+      {
+        $group: {
+          _id: "$tipo"
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          label: {
+            $concat: [
+              { $toUpper: { $substrCP: ["$_id", 0, 1] } },
+              { $substrCP: ["$_id", 1, { $strLenCP: "$_id" }] }
+            ]
+          },
+          value: "$_id"
+        }
+      },
+      { $sort: { label: 1 } }
+    ];
+
+    const tipos = await db
+      .collection("propriedades")
+      .aggregate(pipeline)
+      .toArray();
+
+    res.json(tipos);
+
+  } catch (err) {
+    console.error("Erro ao buscar tipos:", err);
+    res.status(500).json({ erro: "Erro ao buscar tipos" });
+  }
+});
+
+
+//===========================TIPO POR CLIENTE E MUNICIPIO====================
+
+app.get("/propriedades/tipos", async (req, res) => {
+  try {
+    const { cliente_id, municipio } = req.query;
+    if (!cliente_id)
+      return res.status(400).json({ erro: "cliente_id é obrigatório" });
+
+    const pipeline = [
+      { $match: { cliente_id, municipio } },
+      {
+        $group: {
+          _id: "$tipo"
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          label: {
+            $concat: [
+              { $toUpper: { $substrCP: ["$_id", 0, 1] } },
+              { $substrCP: ["$_id", 1, { $strLenCP: "$_id" }] }
+            ]
+          },
+          value: "$_id"
+        }
+      },
+      { $sort: { label: 1 } }
+    ];
+
+    const tipos = await db
+      .collection("propriedades")
+      .aggregate(pipeline)
+      .toArray();
+
+    res.json(tipos);
+
+  } catch (err) {
+    console.error("Erro ao buscar tipos:", err);
+    res.status(500).json({ erro: "Erro ao buscar tipos" });
+  }
+});
+
+
+// ======================= FASES DE PROPRIEDADE POR CLIENTE =======================
+app.get("/propriedades/fases", async (req, res) => {
+  try {
+    const { cliente_id } = req.query;
+    if (!cliente_id)
+      return res.status(400).json({ erro: "cliente_id é obrigatório" });
+
+    const pipeline = [
+      { $match: { cliente_id } },
+      {
+        $group: {
+          _id: "$fase"
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          label: {
+            $concat: [
+              { $toUpper: { $substrCP: ["$_id", 0, 1] } },
+              { $substrCP: ["$_id", 1, { $strLenCP: "$_id" }] }
+            ]
+          },
+          value: "$_id"
+        }
+      },
+      { $sort: { label: 1 } }
+    ];
+
+    const fases = await db
+      .collection("propriedades")
+      .aggregate(pipeline)
+      .toArray();
+
+    res.json(fases);
+
+  } catch (err) {
+    console.error("Erro ao buscar fases:", err);
+    res.status(500).json({ erro: "Erro ao buscar fases" });
+  }
+});
+
+// ======================= FASES DE PROPRIEDADE POR CLIENTE E MUNICIPIO=======================
+
+app.get("/propriedades/fases", async (req, res) => {
+  try {
+    const { cliente_id, municipio } = req.query;
+    if (!cliente_id)
+      return res.status(400).json({ erro: "cliente_id é obrigatório" });
+
+    const pipeline = [
+      { $match: { cliente_id, municipio } },
+      {
+        $group: {
+          _id: "$fase"
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          label: {
+            $concat: [
+              { $toUpper: { $substrCP: ["$_id", 0, 1] } },
+              { $substrCP: ["$_id", 1, { $strLenCP: "$_id" }] }
+            ]
+          },
+          value: "$_id"
+        }
+      },
+      { $sort: { label: 1 } }
+    ];
+
+    const fases = await db
+      .collection("propriedades")
+      .aggregate(pipeline)
+      .toArray();
+
+    res.json(fases);
+
+  } catch (err) {
+    console.error("Erro ao buscar fases:", err);
+    res.status(500).json({ erro: "Erro ao buscar fases" });
+  }
+});
+
+
 
 // 1️⃣ LISTAR MUNICÍPIOS ÚNICOS DO CLIENTE
 app.get("/propriedades/municipios", async (req, res) => {
