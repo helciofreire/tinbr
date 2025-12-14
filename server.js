@@ -1531,21 +1531,44 @@ app.get("/propriedades/municipio", async (req, res) => {
 });
 
 
-// 4️⃣ LISTAR PROPRIEDADES POR PROPRIETÁRIO + CLIENTE
+// LISTAR PROPRIEDADES (dropdown) POR CLIENTE + PROPRIETÁRIO
 app.get("/propriedades-por-proprietario", async (req, res) => {
   try {
-    const { proprietario_id, cliente_id } = req.query;
-    
-    if (!proprietario_id || !cliente_id) {
-      return res.status(400).json({ 
-        erro: "proprietario_id e cliente_id são obrigatórios na query" 
+    const { cliente_id, proprietario_id } = req.query;
+
+    if (!cliente_id || !proprietario_id) {
+      return res.status(400).json({
+        erro: "cliente_id e proprietario_id são obrigatórios"
       });
     }
 
-    const propriedades = await db.collection("propriedades").find({
-      proprietario_id,
-      cliente_id
-    }).toArray();
+    const pipeline = [
+      {
+        $match: {
+          cliente_id,
+          proprietario_id
+        }
+      },
+      {
+        $group: {
+          _id: "$_id",
+          nome: { $first: "$nome" }
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          label: "$nome",
+          value: { $toString: "$_id" }
+        }
+      },
+      { $sort: { label: 1 } }
+    ];
+
+    const propriedades = await db
+      .collection("propriedades")
+      .aggregate(pipeline)
+      .toArray();
 
     res.json(propriedades);
 
@@ -1554,6 +1577,7 @@ app.get("/propriedades-por-proprietario", async (req, res) => {
     res.status(500).json({ erro: "Erro interno ao buscar propriedades" });
   }
 });
+
 
 
 // 5️⃣ ÚLTIMA ROTA — BUSCAR PROPRIEDADE POR ID (sempre por último!)
