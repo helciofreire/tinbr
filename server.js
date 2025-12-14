@@ -1575,7 +1575,11 @@ app.get("/propriedades/municipio", async (req, res) => {
 
     const propriedades = await db
       .collection("propriedades")
-      .find({ ibge, cliente_id })
+      .find({
+        ibge,
+        cliente_id,
+        status: "ativo" // ✅ FILTRO AQUI
+      })
       .sort({ municipio: 1 })
       .toArray();
 
