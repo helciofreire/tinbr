@@ -1792,7 +1792,69 @@ app.get("/propriedades", async (req, res) => {
   }
 });
 
-//PUT ATUALIZAR PROPRIEDADESCOM CLIENTE_ID E PROPRIETARIO_ID
+// ================= ATUALIZAR CAMPOS DIRETAMENTE =================
+app.put("/propriedades/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { cliente_id, proprietario_id } = req.query;
+
+    if (!cliente_id || !proprietario_id) {
+      return res.status(400).json({
+        erro: "cliente_id e proprietario_id são obrigatórios na query."
+      });
+    }
+
+    const camposParaAtualizar = req.body;
+
+    if (!camposParaAtualizar || Object.keys(camposParaAtualizar).length === 0) {
+      return res.status(400).json({
+        erro: "Nenhum campo enviado para atualização."
+      });
+    }
+
+    console.log("📌 PUT /propriedades/:id (simples)", {
+      id,
+      cliente_id,
+      proprietario_id,
+      camposParaAtualizar
+    });
+
+    const resultado = await db.collection("propriedades").updateOne(
+      {
+        _id: id,
+        cliente_id: String(cliente_id),
+        proprietario_id: String(proprietario_id)
+      },
+      {
+        $set: {
+          ...camposParaAtualizar,
+          atualizadoEm: new Date() // ✅ NOME CORRETO
+        }
+      }
+    );
+
+    if (resultado.matchedCount === 0) {
+      return res.status(404).json({
+        erro: "Propriedade não encontrada para esse cliente/proprietário."
+      });
+    }
+
+    return res.json({
+      sucesso: true,
+      mensagem: "Propriedade atualizada com sucesso.",
+      camposAtualizados: camposParaAtualizar
+    });
+
+  } catch (erro) {
+    console.error("💥 Erro PUT /propriedades/:id (simples):", erro);
+    return res.status(500).json({
+      erro: "Erro interno ao atualizar propriedade."
+    });
+  }
+});
+
+
+//PUT ATUALIZAR PROPRIEDADES COM CLIENTE_ID E PROPRIETARIO_ID
 
 app.put("/propriedades/:id", async (req, res) => {
   try {
