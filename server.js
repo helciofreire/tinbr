@@ -2349,7 +2349,8 @@ app.post("/users/login", async (req, res) => {
     console.log("✅ Login bem-sucedido:", usuario.nome);
     res.json({
       ok: true,
-      usuario: usuario._id,	
+      usuario: usuario._id,
+      documento: usuario.documento,		
       nome: usuario.nome,
       nivel: usuario.nivel,
       cliente_id: usuario.cliente_id,
