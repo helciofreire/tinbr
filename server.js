@@ -2354,7 +2354,7 @@ app.post("/users/login", async (req, res) => {
       nome: usuario.nome,
       nivel: usuario.nivel,
       cliente_id: usuario.cliente_id,
-      proprietario: usuario.proprietario
+      proprietario: usuario.proprietario,
       mensagem: "Login realizado com sucesso."
     });
 
