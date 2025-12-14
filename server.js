@@ -1507,6 +1507,63 @@ app.get("/propriedades", async (req, res) => {
   }
 });
 
+// ================= PROPRIEDADES POR PROPRIETÁRIO =================
+app.get("/propriedades-por-proprietario", async (req, res) => {
+  try {
+    const { cliente_id, proprietario_id } = req.query;
+
+    if (!cliente_id || !proprietario_id) {
+      return res.status(400).json({
+        erro: "cliente_id e proprietario_id são obrigatórios"
+      });
+    }
+
+    const propriedades = await db
+      .collection("propriedades")
+      .find({
+        cliente_id,
+        proprietario_id
+      })
+      .project({
+        _id: 1,
+        razao: 1,
+        logradouro: 1,
+        numero: 1,
+        complemento: 1,
+        bairro: 1,
+        municipio: 1,
+        uf: 1
+      })
+      .sort({ razao: 1 })
+      .toArray();
+
+    const dropdown = propriedades.map(p => {
+      const endereco = [
+        p.logradouro,
+        p.numero,
+        p.complemento,
+        p.bairro,
+        `${p.municipio}/${p.uf}`
+      ]
+        .filter(Boolean)
+        .join(" - ");
+
+      return {
+        label: `${p.razao} - ${endereco}`,
+        value: String(p._id)
+      };
+    });
+
+    res.json(dropdown);
+
+  } catch (err) {
+    console.error("Erro propriedades-por-proprietario:", err);
+    res.status(500).json({
+      erro: "Erro ao buscar propriedades do proprietário"
+    });
+  }
+});
+
 
 // 3️⃣ LISTAR PROPRIEDADES POR MUNICÍPIO
 app.get("/propriedades/municipio", async (req, res) => {
