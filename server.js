@@ -1796,11 +1796,11 @@ app.get("/propriedades", async (req, res) => {
 app.put("/propriedades/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const { cliente_id, proprietario_id } = req.query;
+    const { cliente_id } = req.query;
 
-    if (!cliente_id || !proprietario_id) {
+    if (!cliente_id) {
       return res.status(400).json({
-        erro: "cliente_id e proprietario_id são obrigatórios na query."
+        erro: "cliente_id é obrigatório na query."
       });
     }
 
@@ -1835,7 +1835,7 @@ app.put("/propriedades/:id", async (req, res) => {
 
     if (resultado.matchedCount === 0) {
       return res.status(404).json({
-        erro: "Propriedade não encontrada para esse cliente/proprietário."
+        erro: "Propriedade não encontrada para esse cliente."
       });
     }
 
