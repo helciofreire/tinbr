@@ -1796,11 +1796,11 @@ app.get("/propriedades", async (req, res) => {
 app.put("/propriedades/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const { cliente_id } = req.query;
+    const { cliente_id, proprietario_id } = req.query;
 
-    if (!cliente_id) {
+    if (!cliente_id || !proprietario_id) {
       return res.status(400).json({
-        erro: "cliente_id é obrigatório na query."
+        erro: "cliente_id e proprietario_id são obrigatórios na query."
       });
     }
 
@@ -1812,13 +1812,6 @@ app.put("/propriedades/:id", async (req, res) => {
       });
     }
 
-    console.log("📌 PUT /propriedades/:id (simples)", {
-      id,
-      cliente_id,
-      proprietario_id,
-      camposParaAtualizar
-    });
-
     const resultado = await db.collection("propriedades").updateOne(
       {
         _id: id,
@@ -1828,14 +1821,14 @@ app.put("/propriedades/:id", async (req, res) => {
       {
         $set: {
           ...camposParaAtualizar,
-          atualizadoEm: new Date() // ✅ NOME CORRETO
+          atualizadoEm: new Date()
         }
       }
     );
 
     if (resultado.matchedCount === 0) {
       return res.status(404).json({
-        erro: "Propriedade não encontrada para esse cliente."
+        erro: "Propriedade não encontrada para esse cliente/proprietário."
       });
     }
 
@@ -1846,127 +1839,68 @@ app.put("/propriedades/:id", async (req, res) => {
     });
 
   } catch (erro) {
-    console.error("💥 Erro PUT /propriedades/:id (simples):", erro);
+    console.error("💥 Erro PUT /propriedades/:id:", erro);
     return res.status(500).json({
       erro: "Erro interno ao atualizar propriedade."
     });
   }
 });
 
-
-//PUT ATUALIZAR PROPRIEDADES COM CLIENTE_ID E PROPRIETARIO_ID
-
-app.put("/propriedades/:id", async (req, res) => {
+// ================= PROPRIEDADES BLOQUEADAS DO CLIENTE =================
+app.get("/propriedades/bloqueadas", async (req, res) => {
   try {
-    const id = req.params.id;
-    const { cliente_id, proprietario_id } = req.query;
+    const { cliente_id, limit = 1000 } = req.query;
 
-    if (!cliente_id || !proprietario_id) {
+    if (!cliente_id) {
       return res.status(400).json({
-        erro: "cliente_id e proprietario_id são obrigatórios na query."
+        erro: "cliente_id é obrigatório na query"
       });
     }
 
-    console.log("📌 PUT /propriedades/:id", {
-      id,
-      cliente_id,
-      proprietario_id,
-      body: req.body
+    const propriedades = await db
+      .collection("propriedades")
+      .find({
+        cliente_id,
+        status: "bloqueado" // ✅ FILTRO PRINCIPAL
+      })
+      .project({
+        _id: 1,
+        razao: 1,
+        logradouro: 1,
+        numero: 1,
+        complemento: 1,
+        bairro: 1,
+        municipio: 1,
+        uf: 1
+      })
+      .limit(parseInt(limit))
+      .sort({ razao: 1 })
+      .toArray();
+
+    const dropdown = propriedades.map(p => {
+      const endereco = [
+        p.logradouro,
+        p.numero,
+        p.complemento,
+        p.bairro,
+        `${p.municipio}/${p.uf}`
+      ]
+        .filter(Boolean)
+        .join(" - ");
+
+      return {
+        label: `${p.razao} - ${endereco}`,
+        value: String(p._id)
+      };
     });
 
-    // 1) Buscar propriedade existente
-    const existente = await Propriedades.findOne({
-      _id: id,
-      cliente_id: String(cliente_id),
-      proprietario_id: String(proprietario_id)
+    res.json(dropdown);
+
+  } catch (err) {
+    console.error("Erro ao buscar propriedades bloqueadas:", err);
+    res.status(500).json({
+      erro: "Erro ao buscar propriedades bloqueadas"
     });
-
-    if (!existente) {
-      return res.status(404).json({
-        erro: "Propriedade não encontrada para esse cliente/proprietário."
-      });
-    }
-
-    const dados = req.body;
-    const alteracoes = {};
-
-    // Campos numéricos comuns
-    const camposNumericos = [
-      "valor", "dolar", "valordolar", "valordolaratual",
-      "valortin", "tokenqtd", "tokenreal", "tokenunit"
-    ];
-
-    // Campos de data
-    const camposData = [
-      "datainclusao", "dataatualizacao",
-      "datacotacao", "datacotacaoatual"
-    ];
-
-    // 2) Campo a campo
-    for (const campo in dados) {
-      if (!Object.prototype.hasOwnProperty.call(dados, campo)) continue;
-
-      let novoValor = dados[campo];
-      let antigoValor = existente[campo];
-
-      // Ignorar valores vazios
-      if (
-        (novoValor === undefined || novoValor === null || novoValor === "") &&
-        (antigoValor === undefined || antigoValor === null || antigoValor === "")
-      ) continue;
-
-      // Números
-      if (camposNumericos.includes(campo)) {
-        if (typeof novoValor === "string") {
-          novoValor = Number(
-            novoValor.replace(/\./g, "").replace(",", ".")
-          );
-        }
-      }
-
-      // Datas
-      if (camposData.includes(campo)) {
-        const d = new Date(novoValor);
-        if (!isNaN(d.getTime())) novoValor = d;
-      }
-
-      // Documentos
-      if (campo === "cnm" && typeof novoValor === "string") {
-        novoValor = novoValor.replace(/\D/g, "");
-      }
-
-      const nvStr = String(novoValor ?? "");
-      const avStr = String(antigoValor ?? "");
-
-      if (nvStr !== avStr) {
-        existente[campo] = novoValor;
-        alteracoes[campo] = { de: antigoValor, para: novoValor };
-      }
-    }
-
-    if (Object.keys(alteracoes).length === 0) {
-      return res.json({
-        sucesso: false,
-        mensagem: "Nenhum campo alterado.",
-        alteracoes: null
-      });
-    }
-
-    existente.dataatualizacao = new Date();
-
-    // 3) Salvar
-    await existente.save();
-
-    return res.json({
-      sucesso: true,
-      mensagem: "Propriedade atualizada com sucesso.",
-      alteracoes,
-      propriedade: existente
-    });
-
-  } catch (erro) {
-    console.error("💥 Erro PUT /propriedades/:id:", erro);
-    return res.status(500).json({ erro: "Erro interno ao atualizar propriedade." });
   }
 });
 
