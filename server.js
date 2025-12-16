@@ -1846,6 +1846,54 @@ app.put("/propriedades/:id", async (req, res) => {
   }
 });
 
+// ================= ATUALIZAR STATUS DE TODAS AS PROPRIEDADES =================
+app.put("/propriedades/status/proprietario/:idpro", async (req, res) => {
+  try {
+    const { idpro } = req.params;
+    const { cliente_id } = req.query;
+    const { status } = req.body;
+
+    if (!cliente_id) {
+      return res.status(400).json({
+        erro: "cliente_id é obrigatório na query."
+      });
+    }
+
+    if (!status) {
+      return res.status(400).json({
+        erro: "status é obrigatório no body."
+      });
+    }
+
+    const resultado = await db.collection("propriedades").updateMany(
+      {
+        proprietario_id: String(idpro),
+        cliente_id: String(cliente_id)
+      },
+      {
+        $set: {
+          status,
+          atualizadoEm: new Date()
+        }
+      }
+    );
+
+    return res.json({
+      sucesso: true,
+      mensagem: "Status atualizado em todas as propriedades do proprietário.",
+      matched: resultado.matchedCount,
+      modificados: resultado.modifiedCount
+    });
+
+  } catch (erro) {
+    console.error("💥 Erro updateMany status propriedades:", erro);
+    return res.status(500).json({
+      erro: "Erro interno ao atualizar status das propriedades."
+    });
+  }
+});
+
+
 // ================= PROPRIEDADES BLOQUEADAS DO CLIENTE =================
 app.get("/propriedades/bloqueadas", async (req, res) => {
   try {
