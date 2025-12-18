@@ -1580,6 +1580,7 @@ app.get("/propriedades-tabela-por-proprietario", async (req, res) => {
       .find({ cliente_id, proprietario_id })
       .project({
         _id: 1,
+	proprietario_id: 1,
         tipo: 1,
         razao: 1,
         status: 1,
