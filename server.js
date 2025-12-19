@@ -1586,7 +1586,7 @@ app.get("/propriedades-tabela-por-proprietario", async (req, res) => {
         status: 1,
         tokenqtd: 1,
         tokenresto: 1,
-        tokenreal: 1,
+        tokenrealcor: 1,
         logradouro: 1,
         numero: 1,
         complemento: 1,
