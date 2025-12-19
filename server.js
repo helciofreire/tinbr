@@ -1587,28 +1587,22 @@ app.get("/propriedades-por-proprietario", async (req, res) => {
       });
     }
 
-    const pipeline = [
-      {
-        $match: {
-          cliente_id,
-          proprietario_id
-        }
-      },
-      {
-        $group: {
-          _id: "$_id",
-          nome: { $first: "$nome" }
-        }
-      },
-      {
-        $project: {
-          _id: 0,
-          label: "$nome",
-          value: { $toString: "$_id" }
-        }
-      },
-      { $sort: { label: 1 } }
-    ];
+const pipeline = [
+  {
+    $match: {
+      cliente_id,
+      proprietario_id
+    }
+  },
+  {
+    $project: {
+      _id: 0,
+      label: "$razao",               // ✅ campo correto
+      value: { $toString: "$_id" }
+    }
+  },
+  { $sort: { label: 1 } }
+];
 
     const propriedades = await db
       .collection("propriedades")
