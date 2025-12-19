@@ -102,7 +102,6 @@ app.get("/cotacoes/ultima", async (req, res) => {
 });
 
 
-
 // ======================= PROPRIETÁRIOS COM SEGURANÇA =======================
 
 // GET - Listar proprietários APENAS do cliente
@@ -1183,7 +1182,7 @@ app.delete("/tks/:id", async (req, res) => {
 // ROTAS PROPRIEDADES (ordem correta)
 // ------------------------------------------------------------
 // LISTAR CATEGORIAS POR CLIENTE
-app.get("/propriedades/categorias", async (req, res) => {
+app.get("/propriedades/categorias-por-cliente", async (req, res) => {
   try {
     const { cliente_id } = req.query;
     if (!cliente_id)
@@ -1267,7 +1266,7 @@ app.get("/propriedades/categorias", async (req, res) => {
 });
 
 // ======================= TIPOS DE PROPRIEDADE POR CLIENTE=======================
-app.get("/propriedades/tipos", async (req, res) => {
+app.get("/propriedades/tipos-por-cliente", async (req, res) => {
   try {
     const { cliente_id } = req.query;
     if (!cliente_id)
@@ -1354,7 +1353,7 @@ app.get("/propriedades/tipos", async (req, res) => {
 
 
 // ======================= FASES DE PROPRIEDADE POR CLIENTE =======================
-app.get("/propriedades/fases", async (req, res) => {
+app.get("/propriedades/fases-por-cliente", async (req, res) => {
   try {
     const { cliente_id } = req.query;
     if (!cliente_id)
@@ -1476,7 +1475,7 @@ app.get("/propriedades/municipios", async (req, res) => {
 
 
 // 2️⃣ LISTAR TODAS AS PROPRIEDADES DO CLIENTE
-app.get("/propriedades", async (req, res) => {
+app.get("/propriedades-por-cliente", async (req, res) => {
   try {
     const { cliente_id, limit = 1000, sort } = req.query;
     
@@ -1507,62 +1506,6 @@ app.get("/propriedades", async (req, res) => {
   }
 });
 
-// ================= PROPRIEDADES POR PROPRIETÁRIO =================
-app.get("/propriedades-por-proprietario", async (req, res) => {
-  try {
-    const { cliente_id, proprietario_id } = req.query;
-
-    if (!cliente_id || !proprietario_id) {
-      return res.status(400).json({
-        erro: "cliente_id e proprietario_id são obrigatórios"
-      });
-    }
-
-    const propriedades = await db
-      .collection("propriedades")
-      .find({
-        cliente_id,
-        proprietario_id
-      })
-      .project({
-        _id: 1,
-        razao: 1,
-        logradouro: 1,
-        numero: 1,
-        complemento: 1,
-        bairro: 1,
-        municipio: 1,
-        uf: 1
-      })
-      .sort({ razao: 1 })
-      .toArray();
-
-    const dropdown = propriedades.map(p => {
-      const endereco = [
-        p.logradouro,
-        p.numero,
-        p.complemento,
-        p.bairro,
-        `${p.municipio}/${p.uf}`
-      ]
-        .filter(Boolean)
-        .join(" - ");
-
-      return {
-        label: `${p.razao} - ${endereco}`,
-        value: String(p._id)
-      };
-    });
-
-    res.json(dropdown);
-
-  } catch (err) {
-    console.error("Erro propriedades-por-proprietario:", err);
-    res.status(500).json({
-      erro: "Erro ao buscar propriedades do proprietário"
-    });
-  }
-});
 
 // ================= PROPRIEDADES (DADOS COMPLETOS) POR PROPRIETÁRIO =================
 app.get("/propriedades-tabela-por-proprietario", async (req, res) => {
@@ -1604,8 +1547,6 @@ app.get("/propriedades-tabela-por-proprietario", async (req, res) => {
     res.status(500).json([]);
   }
 });
-
-
 
 
 // 3️⃣ LISTAR PROPRIEDADES POR MUNICÍPIO
@@ -1711,6 +1652,37 @@ app.get("/propriedades/:id", async (req, res) => {
   }
 });
 
+//GET LISTAR PROPRIEDADES POR CLIENTE E PROPRIETÁRIO
+
+app.get("/propriedades-por-proprietario", async (req, res) => {
+  try {
+    const { cliente_id, proprietario_id } = req.query;
+
+    if (!cliente_id) {
+      return res.status(400).json({ erro: "cliente_id é obrigatório." });
+    }
+    if (!proprietario_id) {
+      return res.status(400).json({ erro: "proprietario_id é obrigatório." });
+    }
+
+    console.log("📌 GET /propriedades", { cliente_id, proprietario_id });
+
+    const propriedades = await Propriedades.find({
+      cliente_id: String(cliente_id),
+      proprietario_id: String(proprietario_id)
+    }).lean();
+
+    if (!propriedades || propriedades.length === 0) {
+      return res.status(404).json({ erro: "Nenhuma propriedade encontrada." });
+    }
+
+    return res.json(propriedades);
+
+  } catch (erro) {
+    console.error("💥 Erro GET /propriedades:", erro);
+    return res.status(500).json({ erro: "Erro interno ao buscar propriedades." });
+  }
+});
 
 
 // POST - Criar nova propriedade COM validação
@@ -1803,37 +1775,6 @@ app.put("/propriedades/:id", async (req, res) => {
   }
 });
 
-//GET LISTAR PROPRIEDADES POR CLIENTE E PROPRIETÁRIO
-
-app.get("/propriedades", async (req, res) => {
-  try {
-    const { cliente_id, proprietario_id } = req.query;
-
-    if (!cliente_id) {
-      return res.status(400).json({ erro: "cliente_id é obrigatório." });
-    }
-    if (!proprietario_id) {
-      return res.status(400).json({ erro: "proprietario_id é obrigatório." });
-    }
-
-    console.log("📌 GET /propriedades", { cliente_id, proprietario_id });
-
-    const propriedades = await Propriedades.find({
-      cliente_id: String(cliente_id),
-      proprietario_id: String(proprietario_id)
-    }).lean();
-
-    if (!propriedades || propriedades.length === 0) {
-      return res.status(404).json({ erro: "Nenhuma propriedade encontrada." });
-    }
-
-    return res.json(propriedades);
-
-  } catch (erro) {
-    console.error("💥 Erro GET /propriedades:", erro);
-    return res.status(500).json({ erro: "Erro interno ao buscar propriedades." });
-  }
-});
 
 // ================= ATUALIZAR CAMPOS DIRETAMENTE =================
 app.put("/propriedades/:id", async (req, res) => {
