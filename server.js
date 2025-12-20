@@ -1548,6 +1548,46 @@ app.get("/propriedades-tabela-por-proprietario", async (req, res) => {
   }
 });
 
+// ================= PROPRIEDADES (DADOS COMPLETOS) POR CLIENTE =================
+app.get("/propriedades-tabela-por-cliente", async (req, res) => {
+  try {
+    const { cliente_id } = req.query;
+
+    if (!cliente_id) {
+      return res.status(400).json({
+        erro: "cliente_id é obrigatório"
+      });
+    }
+
+    const propriedades = await db
+      .collection("propriedades")
+      .find({ cliente_id })
+      .project({
+        _id: 1,
+        proprietario_id: 1,
+        tipo: 1,
+        razao: 1,
+        status: 1,
+        tokenqtd: 1,
+        tokenresto: 1,
+        tokenrealcor: 1,
+        logradouro: 1,
+        numero: 1,
+        complemento: 1,
+        bairro: 1,
+        municipio: 1,
+        uf: 1
+      })
+      .sort({ razao: 1 })
+      .toArray();
+
+    res.json(propriedades);
+
+  } catch (err) {
+    console.error("Erro propriedades-tabela-por-cliente:", err);
+    res.status(500).json([]);
+  }
+});
 
 // 3️⃣ LISTAR PROPRIEDADES POR MUNICÍPIO
 app.get("/propriedades/municipio", async (req, res) => {
