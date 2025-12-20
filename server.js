@@ -1473,6 +1473,56 @@ app.get("/propriedades/municipios", async (req, res) => {
   }
 });
 
+// ================= PROPRIEDADE POR REFERÊNCIA + NÍVEL =================
+app.get("/propriedades/por-referencia", async (req, res) => {
+  try {
+    const { cliente_id, referencia, nivel } = req.query;
+
+    if (!cliente_id || !referencia || nivel === undefined) {
+      return res.status(400).json({
+        erro: "cliente_id, referencia e nivel são obrigatórios"
+      });
+    }
+
+    const nivelNum = Number(nivel);
+    if (Number.isNaN(nivelNum)) {
+      return res.status(400).json({ erro: "nivel deve ser numérico" });
+    }
+
+    // 🔍 Busca básica
+    const propriedade = await db.collection("propriedades").findOne(
+      { cliente_id, referencia },
+      { projection: { _id: 1, status: 1 } }
+    );
+
+    // ❌ Não encontrou
+    if (!propriedade) {
+      return res.status(404).json({
+        erro: "Propriedade não encontrada"
+      });
+    }
+
+    // 🔒 Regra de nível
+    if (nivelNum >= 3 && propriedade.status !== "ativo") {
+      return res.status(403).json({
+        erro: "Propriedade bloqueada"
+      });
+    }
+
+    // ✅ Permitido
+    return res.json({
+      _id: propriedade._id, // já string
+      status: propriedade.status
+    });
+
+  } catch (err) {
+    console.error("Erro propriedades/por-referencia:", err);
+    res.status(500).json({
+      erro: "Erro interno ao buscar propriedade"
+    });
+  }
+});
+
 
 // 2️⃣ LISTAR TODAS AS PROPRIEDADES DO CLIENTE
 app.get("/propriedades-por-cliente", async (req, res) => {
