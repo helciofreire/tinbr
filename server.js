@@ -1626,9 +1626,10 @@ app.get("/propriedades-tabela-por-cliente", async (req, res) => {
         complemento: 1,
         bairro: 1,
         municipio: 1,
-        uf: 1
+        uf: 1,
+	referencia: 1
       })
-      .sort({ razao: 1 })
+      .sort({ referencia: 1 })
       .toArray();
 
     res.json(propriedades);
