@@ -1737,6 +1737,39 @@ app.get("/propriedades/:id", async (req, res) => {
   }
 });
 
+// BUSCAR PROPRIEDADE POR CIB (sempre por último!)
+export async function verificarCib(cib, cliente_id) {
+  const url = `https://tinbr.onrender.com/propriedades/existe-cib?cib=${encodeURIComponent(cib)}&cliente_id=${cliente_id}`;
+
+  const res = await fetch(url);
+
+  // existe → NOK
+  if (res.status === 200) {
+    return {
+      status: "nok",
+      existe: true,
+      status_cib: false
+    };
+  }
+
+  // não existe → OK
+  if (res.status === 404) {
+    return {
+      status: "ok",
+      existe: false,
+      status_cib: true
+    };
+  }
+
+  // qualquer outro erro
+  return {
+    status: "erro",
+    existe: null,
+    status_cib: false
+  };
+}
+
+
 //GET LISTAR PROPRIEDADES POR CLIENTE E PROPRIETÁRIO
 
 app.get("/propriedades-por-proprietario", async (req, res) => {
