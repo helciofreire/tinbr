@@ -7,6 +7,8 @@ import { iniciarCronJobs } from "./cron-jobs.js";
 // ----------------------------------------
 // Configuração Express
 // ----------------------------------------
+console.log("🔥 SERVER CARREGADO:", __filename); // 👈 AQUI
+
 const app = express();
 app.use(cors());
 app.use(express.json());
