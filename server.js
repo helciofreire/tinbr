@@ -1739,36 +1739,56 @@ app.get("/propriedades/:id", async (req, res) => {
 
 // BUSCAR PROPRIEDADE POR CIB (sempre por último!)
 app.get("/propriedades/existe-cib", async (req, res) => {
-  const { cib, cliente_id } = req.query;
+  try {
+    const { cib, cliente_id } = req.query;
 
-console.log("DB NAME:", db.databaseName);
-console.log("COLLECTION:", db.collection("propriedades").collectionName);
+    if (!cib || !cliente_id) {
+      return res.status(400).json({ erro: "Parâmetros inválidos" });
+    }
 
-const total = await db.collection("propriedades").countDocuments();
-console.log("TOTAL propriedades:", total);
+    // 🔎 Logs de ambiente (debug controlado)
+    console.log("DB NAME:", db.databaseName);
+    console.log("COLLECTION:", db.collection("propriedades").collectionName);
 
-  if (!cib || !cliente_id) {
-    return res.status(400).json({ erro: "Parâmetros inválidos" });
-  }
+    const total = await db.collection("propriedades").countDocuments();
+    console.log("TOTAL propriedades:", total);
 
-  const prop = await db.collection("propriedades").findOne({
-    cib: cib.trim(),
-    cliente_id: cliente_id.trim()
-  });
+    // 🔐 Normalização forte do CIB
+    const cibNormalizado = String(cib)
+      .replace(/\D/g, "")
+      .padStart(8, "0");
 
-  // 🔴 EXISTE
-  if (prop) {
-    return res.status(200).json({
-      existe: true,
-      id: prop._id
+    const clienteNormalizado = String(cliente_id).trim();
+
+    console.log("CIB recebido:", cib, "→", cibNormalizado);
+    console.log("CLIENTE recebido:", clienteNormalizado);
+
+    const prop = await db.collection("propriedades").findOne({
+      cib: cibNormalizado,
+      cliente_id: clienteNormalizado
+    });
+
+    // 🔴 EXISTE
+    if (prop) {
+      return res.status(200).json({
+        existe: true,
+        id: prop._id
+      });
+    }
+
+    // 🟢 NÃO EXISTE
+    return res.status(404).json({
+      existe: false
+    });
+
+  } catch (err) {
+    console.error("💥 Erro existe-cib:", err);
+    return res.status(500).json({
+      erro: "Erro interno ao verificar CIB"
     });
   }
-
-  // 🟢 NÃO EXISTE
-  return res.status(404).json({
-    existe: false
-  });
 });
+
 
 
 
