@@ -210,6 +210,32 @@ app.get("/proprietarios/documento/:documento", async (req, res) => {
   }
 });
 
+// LISTAR PROPRIETÁRIOS BLOQUEADOS POR CLIENTE
+app.get("/proprietarios/bloqueados", async (req, res) => {
+  try {
+    const { cliente_id } = req.query;
+
+    if (!cliente_id) {
+      return res.status(400).json({ erro: "cliente_id é obrigatório" });
+    }
+
+    const proprietarios = await db
+      .collection("proprietarios")
+      .find({
+        cliente_id: cliente_id.trim(),
+        situacao: "bloqueado"
+      })
+      .sort({ razao: 1 })
+      .toArray();
+
+    return res.json(proprietarios);
+
+  } catch (err) {
+    console.error("Erro ao listar proprietários bloqueados:", err);
+    return res.status(500).json({ erro: "Erro ao listar proprietários bloqueados" });
+  }
+});
+
 
 // POST - Criar novo proprietário COM cliente_id
 app.post("/proprietarios", async (req, res) => {
