@@ -1739,7 +1739,7 @@ app.get("/propriedades/:id", async (req, res) => {
 
 // BUSCAR PROPRIEDADE POR CIB (sempre por último!)
 export async function verificarCib(cib, cliente_id) {
-  const url = `https://tinbr.onrender.com/propriedades/existe-cib?cib=${encodeURIComponent(cib)}&cliente_id=${cliente_id}`;
+  const url = `https://tinbr.onrender.com/propriedades/existe-cib?cib=${cib)&cliente_id=${cliente_id}`;
 
   const res = await fetch(url);
 
