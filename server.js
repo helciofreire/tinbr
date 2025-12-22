@@ -212,38 +212,44 @@ app.get("/proprietarios/responsavel/:cpfresp", async (req, res) => {
   }
 });
 
-// backend/proprietarios.jsw
-
-export async function desbloquearProprietario(proprietario_id, cliente_id) {
+// DESBLOQUEAR PROPRIETÁRIO POR ID (ID STRING)
+app.patch("/proprietarios/:id/desbloquear", async (req, res) => {
   try {
-    if (!proprietario_id || !cliente_id) {
-      throw new Error("proprietario_id e cliente_id são obrigatórios");
+    const { id } = req.params;
+    const { cliente_id } = req.body;
+
+    console.log("🔓 Desbloquear:", { id, cliente_id });
+
+    if (!cliente_id) {
+      return res.status(400).json({ erro: "cliente_id é obrigatório" });
     }
 
-    const url = `https://tinbr.onrender.com/proprietarios/${proprietario_id}/desbloquear`;
-
-    const res = await fetch(url, {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json"
+    const result = await db.collection("proprietarios").updateOne(
+      {
+        _id: id.trim(),                 // ✅ STRING
+        cliente_id: cliente_id.trim()   // ✅ STRING
       },
-      body: JSON.stringify({ cliente_id })
-    });
+      {
+        $set: {
+          situacao: "ativo",
+          atualizadoEm: new Date()
+        }
+      }
+    );
 
-    if (!res.ok) {
-      const erro = await res.json().catch(() => ({}));
-      console.error("Erro API desbloquear:", erro);
-      return false;
+    console.log("📊 Mongo result:", result);
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ erro: "Proprietário não encontrado" });
     }
 
-    return true;
+    return res.json({ sucesso: true });
 
   } catch (err) {
-    console.error("💥 Erro desbloquearProprietario:", err);
-    return false;
+    console.error("💥 Erro ao desbloquear proprietário:", err);
+    return res.status(500).json({ erro: err.message });
   }
-}
-
+});
 
 // GET - Buscar proprietário por ID COM verificação de cliente
 app.get("/proprietarios/:id", async (req, res) => {
