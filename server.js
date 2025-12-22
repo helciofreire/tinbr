@@ -1738,36 +1738,32 @@ app.get("/propriedades/:id", async (req, res) => {
 });
 
 // BUSCAR PROPRIEDADE POR CIB (sempre por último!)
-export async function verificarCib(cib, cliente_id) {
-  const url = `https://tinbr.onrender.com/propriedades/existe-cib?cib=${cib}&cliente_id=${cliente_id}`;
+app.get("/propriedades/existe-cib", async (req, res) => {
+  const { cib, cliente_id } = req.query;
 
-  const res = await fetch(url);
+  if (!cib || !cliente_id) {
+    return res.status(400).json({ erro: "Parâmetros inválidos" });
+  }
 
-  // existe → NOK
-  if (res.status === 200) {
-    return {
-      status: "nok",
+  const prop = await db.collection("propriedades").findOne({
+    cib: cib.trim(),
+    cliente_id: cliente_id.trim()
+  });
+
+  // 🔴 EXISTE
+  if (prop) {
+    return res.status(200).json({
       existe: true,
-      status_cib: false
-    };
+      id: prop._id
+    });
   }
 
-  // não existe → OK
-  if (res.status === 404) {
-    return {
-      status: "ok",
-      existe: false,
-      status_cib: true
-    };
-  }
+  // 🟢 NÃO EXISTE
+  return res.status(404).json({
+    existe: false
+  });
+});
 
-  // qualquer outro erro
-  return {
-    status: "erro",
-    existe: null,
-    status_cib: false
-  };
-}
 
 
 //GET LISTAR PROPRIEDADES POR CLIENTE E PROPRIETÁRIO
