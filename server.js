@@ -1738,24 +1738,33 @@ app.get("/propriedades/:id", async (req, res) => {
   }
 });
 
-// BUSCAR PROPRIEDADE POR CIB (sempre por último!)
+// BUSCAR PROPRIEDADE POR CIB (global)
 app.get("/propriedades/cib/existe", async (req, res) => {
-  const { cib, cliente_id } = req.query;
+  try {
+    const { cib } = req.query;
 
-  if (!cib || !cliente_id) {
-    return res.status(400).json({ erro: "Parâmetros inválidos" });
+    if (!cib) {
+      return res.status(400).json({ erro: "cib é obrigatório" });
+    }
+
+    const prop = await db.collection("propriedades").findOne({
+      cib: cib.trim()
+    });
+
+    if (prop) {
+      return res.status(200).json({
+        existe: true,
+        id: prop._id,
+        cliente_id: prop.cliente_id
+      });
+    }
+
+    return res.status(404).json({ existe: false });
+
+  } catch (err) {
+    console.error("Erro ao verificar CIB:", err);
+    return res.status(500).json({ erro: "Erro ao verificar CIB" });
   }
-
-  const prop = await db.collection("propriedades").findOne({
-    cib: cib.trim(),
-    cliente_id: cliente_id.trim()
-  });
-
-  if (prop) {
-    return res.status(200).json({ existe: true, id: prop._id });
-  }
-
-  return res.status(404).json({ existe: false });
 });
 
 
