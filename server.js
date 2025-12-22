@@ -212,6 +212,39 @@ app.get("/proprietarios/responsavel/:cpfresp", async (req, res) => {
   }
 });
 
+// backend/proprietarios.jsw
+
+export async function desbloquearProprietario(proprietario_id, cliente_id) {
+  try {
+    if (!proprietario_id || !cliente_id) {
+      throw new Error("proprietario_id e cliente_id são obrigatórios");
+    }
+
+    const url = `https://tinbr.onrender.com/proprietarios/${proprietario_id}/desbloquear`;
+
+    const res = await fetch(url, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ cliente_id })
+    });
+
+    if (!res.ok) {
+      const erro = await res.json().catch(() => ({}));
+      console.error("Erro API desbloquear:", erro);
+      return false;
+    }
+
+    return true;
+
+  } catch (err) {
+    console.error("💥 Erro desbloquearProprietario:", err);
+    return false;
+  }
+}
+
+
 // GET - Buscar proprietário por ID COM verificação de cliente
 app.get("/proprietarios/:id", async (req, res) => {
   try {
