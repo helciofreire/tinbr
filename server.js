@@ -1746,48 +1746,34 @@ app.get("/propriedades/existe-cib", async (req, res) => {
       return res.status(400).json({ erro: "Parâmetros inválidos" });
     }
 
-    // 🔎 Logs de ambiente (debug controlado)
-    console.log("DB NAME:", db.databaseName);
-    console.log("COLLECTION:", db.collection("propriedades").collectionName);
-
-    const total = await db.collection("propriedades").countDocuments();
-    console.log("TOTAL propriedades:", total);
-
-    // 🔐 Normalização forte do CIB
-    const cibNormalizado = String(cib)
-      .replace(/\D/g, "")
-      .padStart(8, "0");
-
-    const clienteNormalizado = String(cliente_id).trim();
-
-    console.log("CIB recebido:", cib, "→", cibNormalizado);
-    console.log("CLIENTE recebido:", clienteNormalizado);
+    const cibNormalizado = String(cib).replace(/\D/g, "").padStart(8, "0");
 
     const prop = await db.collection("propriedades").findOne({
-      cib: cibNormalizado,
-      cliente_id: clienteNormalizado
+      cliente_id: cliente_id.trim(),
+      cib: { $regex: `^\\s*${cibNormalizado}\\s*$` }
     });
 
-    // 🔴 EXISTE
     if (prop) {
       return res.status(200).json({
         existe: true,
+        status: "nok",
+        status_cib: false,
         id: prop._id
       });
     }
 
-    // 🟢 NÃO EXISTE
     return res.status(404).json({
-      existe: false
+      existe: false,
+      status: "ok",
+      status_cib: true
     });
 
   } catch (err) {
-    console.error("💥 Erro existe-cib:", err);
-    return res.status(500).json({
-      erro: "Erro interno ao verificar CIB"
-    });
+    console.error("Erro existe-cib:", err);
+    return res.status(500).json({ erro: "Erro interno" });
   }
 });
+
 
 
 
