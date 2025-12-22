@@ -7,7 +7,6 @@ import { iniciarCronJobs } from "./cron-jobs.js";
 // ----------------------------------------
 // Configuração Express
 // ----------------------------------------
-console.log("🔥 SERVER CARREGADO:", __filename); // 👈 AQUI
 
 const app = express();
 app.use(cors());
@@ -1740,63 +1739,25 @@ app.get("/propriedades/:id", async (req, res) => {
 });
 
 // BUSCAR PROPRIEDADE POR CIB (sempre por último!)
-app.get("/propriedades/existe-cib", async (req, res) => {
-  try {
-    const { cib, cliente_id } = req.query;
+app.get("/propriedades/cib/existe", async (req, res) => {
+  const { cib, cliente_id } = req.query;
 
-    // 1️⃣ validação básica
-    if (!cib || !cliente_id) {
-      return res.status(400).json({ erro: "Parâmetros inválidos" });
-    }
-
-    // 2️⃣ 🔎 DEBUG TEMPORÁRIO — LOGA TODOS OS CIBs DO CLIENTE
-    const docs = await db.collection("propriedades").find({
-      cliente_id: cliente_id.trim()
-    }).toArray();
-
-    console.log(
-      "DEBUG CIBs:",
-      docs.map(d => ({
-        cib: d.cib,
-        len: typeof d.cib === "string" ? d.cib.length : "NOT_STRING",
-        codes: typeof d.cib === "string"
-          ? d.cib.split("").map(c => c.charCodeAt(0))
-          : null
-      }))
-    );
-
-    // 3️⃣ normalização do CIB recebido
-    const cibNormalizado = String(cib).replace(/\D/g, "").padStart(8, "0");
-    console.log("CIB recebido:", cib, "→", cibNormalizado);
-
-    // 4️⃣ busca real
-    const prop = await db.collection("propriedades").findOne({
-      cliente_id: cliente_id.trim(),
-      cib: cibNormalizado
-    });
-
-    // 🔴 EXISTE
-    if (prop) {
-      return res.status(200).json({
-        existe: true,
-        status: "nok",
-        status_cib: false,
-        id: prop._id
-      });
-    }
-
-    // 🟢 NÃO EXISTE
-    return res.status(404).json({
-      existe: false,
-      status: "ok",
-      status_cib: true
-    });
-
-  } catch (err) {
-    console.error("💥 existe-cib:", err);
-    return res.status(500).json({ erro: "Erro interno" });
+  if (!cib || !cliente_id) {
+    return res.status(400).json({ erro: "Parâmetros inválidos" });
   }
+
+  const prop = await db.collection("propriedades").findOne({
+    cib: cib.trim(),
+    cliente_id: cliente_id.trim()
+  });
+
+  if (prop) {
+    return res.status(200).json({ existe: true, id: prop._id });
+  }
+
+  return res.status(404).json({ existe: false });
 });
+
 
 
 //GET LISTAR PROPRIEDADES POR CLIENTE E PROPRIETÁRIO
