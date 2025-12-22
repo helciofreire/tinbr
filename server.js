@@ -212,6 +212,74 @@ app.get("/proprietarios/responsavel/:cpfresp", async (req, res) => {
   }
 });
 
+// BLOQUEAR PROPRIETÁRIO + PROPRIEDADES (COM DADOS DE BLOQUEIO)
+app.patch("/proprietarios/bloquear", async (req, res) => {
+  try {
+    const { cliente_id, dados_bloqueio } = req.body;
+
+    console.log("⛔ Bloqueio avançado:", { cliente_id, dados_bloqueio });
+
+    if (!cliente_id) {
+      return res.status(400).json({ erro: "cliente_id é obrigatório" });
+    }
+
+    if (!dados_bloqueio || !dados_bloqueio._id) {
+      return res.status(400).json({ erro: "dados_bloqueio inválidos" });
+    }
+
+    const proprietario_id = dados_bloqueio._id.trim();
+
+    /* 1️⃣ BLOQUEIA O PROPRIETÁRIO */
+    const resultProp = await db.collection("proprietarios").updateOne(
+      {
+        _id: proprietario_id,
+        cliente_id: cliente_id.trim()
+      },
+      {
+        $set: {
+          situacao: "bloqueado",
+          dados_bloqueio: {
+            ...dados_bloqueio,
+            data_inicio_exclusao: new Date(),
+            data_encerramento: null
+          },
+          atualizadoEm: new Date()
+        }
+      }
+    );
+
+    if (resultProp.matchedCount === 0) {
+      return res.status(404).json({ erro: "Proprietário não encontrado" });
+    }
+
+    /* 2️⃣ BLOQUEIA PROPRIEDADES DO PROPRIETÁRIO */
+    const resultProps = await db.collection("propriedades").updateMany(
+      {
+        proprietario_id,
+        cliente_id: cliente_id.trim()
+      },
+      {
+        $set: {
+          status: "bloqueado",
+          motivo_bloqueio: dados_bloqueio.motivo_exclusao || null,
+          atualizadoEm: new Date()
+        }
+      }
+    );
+
+    return res.json({
+      sucesso: true,
+      proprietario_id,
+      propriedadesBloqueadas: resultProps.modifiedCount
+    });
+
+  } catch (err) {
+    console.error("💥 Erro no bloqueio avançado:", err);
+    return res.status(500).json({ erro: err.message });
+  }
+});
+
+
 // DESBLOQUEAR PROPRIETÁRIO POR ID (ID STRING)
 app.patch("/proprietarios/:id/desbloquear", async (req, res) => {
   try {
