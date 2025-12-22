@@ -1742,17 +1742,38 @@ app.get("/propriedades/existe-cib", async (req, res) => {
   try {
     const { cib, cliente_id } = req.query;
 
+    // 1️⃣ validação básica
     if (!cib || !cliente_id) {
       return res.status(400).json({ erro: "Parâmetros inválidos" });
     }
 
-    const cibNormalizado = String(cib).replace(/\D/g, "").padStart(8, "0");
+    // 2️⃣ 🔎 DEBUG TEMPORÁRIO — LOGA TODOS OS CIBs DO CLIENTE
+    const docs = await db.collection("propriedades").find({
+      cliente_id: cliente_id.trim()
+    }).toArray();
 
+    console.log(
+      "DEBUG CIBs:",
+      docs.map(d => ({
+        cib: d.cib,
+        len: typeof d.cib === "string" ? d.cib.length : "NOT_STRING",
+        codes: typeof d.cib === "string"
+          ? d.cib.split("").map(c => c.charCodeAt(0))
+          : null
+      }))
+    );
+
+    // 3️⃣ normalização do CIB recebido
+    const cibNormalizado = String(cib).replace(/\D/g, "").padStart(8, "0");
+    console.log("CIB recebido:", cib, "→", cibNormalizado);
+
+    // 4️⃣ busca real
     const prop = await db.collection("propriedades").findOne({
       cliente_id: cliente_id.trim(),
-      cib: { $regex: `^\\s*${cibNormalizado}\\s*$` }
+      cib: cibNormalizado
     });
 
+    // 🔴 EXISTE
     if (prop) {
       return res.status(200).json({
         existe: true,
@@ -1762,6 +1783,7 @@ app.get("/propriedades/existe-cib", async (req, res) => {
       });
     }
 
+    // 🟢 NÃO EXISTE
     return res.status(404).json({
       existe: false,
       status: "ok",
@@ -1769,13 +1791,10 @@ app.get("/propriedades/existe-cib", async (req, res) => {
     });
 
   } catch (err) {
-    console.error("Erro existe-cib:", err);
+    console.error("💥 existe-cib:", err);
     return res.status(500).json({ erro: "Erro interno" });
   }
 });
-
-
-
 
 
 //GET LISTAR PROPRIEDADES POR CLIENTE E PROPRIETÁRIO
