@@ -1741,6 +1741,12 @@ app.get("/propriedades/:id", async (req, res) => {
 app.get("/propriedades/existe-cib", async (req, res) => {
   const { cib, cliente_id } = req.query;
 
+console.log("DB NAME:", db.databaseName);
+console.log("COLLECTION:", db.collection("propriedades").collectionName);
+
+const total = await db.collection("propriedades").countDocuments();
+console.log("TOTAL propriedades:", total);
+
   if (!cib || !cliente_id) {
     return res.status(400).json({ erro: "Parâmetros inválidos" });
   }
