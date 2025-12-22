@@ -1767,6 +1767,36 @@ app.get("/propriedades/cib/existe", async (req, res) => {
   }
 });
 
+// VERIFICAR SE REFERÊNCIA EXISTE PARA O CLIENTE
+app.get("/propriedades/referencia/existe", async (req, res) => {
+  try {
+    const { referencia, cliente_id } = req.query;
+
+    if (!referencia || !cliente_id) {
+      return res.status(400).json({ erro: "referencia e cliente_id são obrigatórios" });
+    }
+
+    const existe = await db
+      .collection("propriedades")
+      .countDocuments(
+        {
+          referencia: referencia.trim(),
+          cliente_id: cliente_id.trim()
+        },
+        { limit: 1 }
+      );
+
+    if (existe > 0) {
+      return res.status(200).json({ existe: true });
+    }
+
+    return res.status(404).json({ existe: false });
+
+  } catch (err) {
+    console.error("Erro ao verificar referência:", err);
+    return res.status(500).json({ erro: "Erro ao verificar referência" });
+  }
+});
 
 
 //GET LISTAR PROPRIEDADES POR CLIENTE E PROPRIETÁRIO
