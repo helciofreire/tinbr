@@ -40,6 +40,12 @@ function senhaValida(senha) {
   return regex.test(senha);
 }
 
+// 🔖 Constantes de ações de histórico
+const ACAO_HISTORICO = {
+  BLOQUEIO: "bloqueio",
+  DESBLOQUEIO: "desbloqueio"
+};
+
 // ======================= COTAÇÕES =======================
 
 // POST - Salvar cotação do dólar
@@ -248,7 +254,7 @@ app.get("/proprietarios/responsavel/:cpfresp", async (req, res) => {
 
 
 
-// BLOQUEAR PROPRIETÁRIO + PROPRIEDADES (COM DADOS DE BLOQUEIO)
+// ⛔ BLOQUEAR PROPRIETÁRIO + PROPRIEDADES (COM HISTÓRICO)
 app.patch("/proprietarios/bloquear", async (req, res) => {
   try {
     const { cliente_id, dados_bloqueio } = req.body;
@@ -264,6 +270,7 @@ app.patch("/proprietarios/bloquear", async (req, res) => {
     }
 
     const proprietario_id = dados_bloqueio._id.trim();
+    const agora = new Date();
 
     /* 1️⃣ BLOQUEIA O PROPRIETÁRIO */
     const resultProp = await db.collection("proprietarios").updateOne(
@@ -276,10 +283,10 @@ app.patch("/proprietarios/bloquear", async (req, res) => {
           situacao: "bloqueado",
           dados_bloqueio: {
             ...dados_bloqueio,
-            data_inicio_exclusao: new Date(),
+            data_inicio_exclusao: agora,
             data_encerramento: null
           },
-          atualizadoEm: new Date()
+          atualizadoEm: agora
         }
       }
     );
@@ -288,7 +295,7 @@ app.patch("/proprietarios/bloquear", async (req, res) => {
       return res.status(404).json({ erro: "Proprietário não encontrado" });
     }
 
-    /* 2️⃣ BLOQUEIA PROPRIEDADES DO PROPRIETÁRIO */
+    /* 2️⃣ BLOQUEIA PROPRIEDADES */
     const resultProps = await db.collection("propriedades").updateMany(
       {
         proprietario_id,
@@ -298,10 +305,21 @@ app.patch("/proprietarios/bloquear", async (req, res) => {
         $set: {
           status: "bloqueado",
           motivo_bloqueio: dados_bloqueio.motivo_exclusao || null,
-          atualizadoEm: new Date()
+          atualizadoEm: agora
         }
       }
     );
+
+    /* 3️⃣ HISTÓRICO (BLOQUEIO) */
+    await db.collection("proprietarios_historico").insertOne({
+      proprietario_id,
+      cliente_id: cliente_id.trim(),
+      acao: "bloqueio", // ou ACAO_HISTORICO.BLOQUEIO
+      motivo: dados_bloqueio.motivo_exclusao || null,
+      usuario: dados_bloqueio.usuario || null,
+      data: agora,
+      propriedades_afetadas: resultProps.modifiedCount
+    });
 
     return res.json({
       sucesso: true,
@@ -316,44 +334,74 @@ app.patch("/proprietarios/bloquear", async (req, res) => {
 });
 
 
-// DESBLOQUEAR PROPRIETÁRIO POR ID (ID STRING)
+
+// 🔓 DESBLOQUEAR PROPRIETÁRIO (COM CASCATA + HISTÓRICO)
 app.patch("/proprietarios/:id/desbloquear", async (req, res) => {
   try {
-    const { id } = req.params;
-    const { cliente_id } = req.body;
-
-    console.log("🔓 Desbloquear:", { id, cliente_id });
+    const { id } = req.params; // proprietario_id
+    const { cliente_id, usuario } = req.body;
 
     if (!cliente_id) {
       return res.status(400).json({ erro: "cliente_id é obrigatório" });
     }
 
-    const result = await db.collection("proprietarios").updateOne(
+    const agora = new Date();
+
+    // 1️⃣ Desbloqueia o proprietário
+    const resultProp = await db.collection("proprietarios").updateOne(
       {
-        _id: id.trim(),                 // ✅ STRING
-        cliente_id: cliente_id.trim()   // ✅ STRING
+        _id: id.trim(),
+        cliente_id: cliente_id.trim()
       },
       {
         $set: {
           situacao: "ativo",
-          atualizadoEm: new Date()
+          atualizadoEm: agora,
+          data_encerramento: null
         }
       }
     );
 
-    console.log("📊 Mongo result:", result);
-
-    if (result.matchedCount === 0) {
+    if (resultProp.matchedCount === 0) {
       return res.status(404).json({ erro: "Proprietário não encontrado" });
     }
 
-    return res.json({ sucesso: true });
+    // 2️⃣ Reativa TODAS as propriedades do proprietário
+    const resultProps = await db.collection("propriedades").updateMany(
+      {
+        proprietario_id: id.trim(),
+        cliente_id: cliente_id.trim()
+      },
+      {
+        $set: {
+          status: "ativo",
+          atualizadoEm: agora
+        }
+      }
+    );
+
+    // 3️⃣ Registra histórico
+    await db.collection("proprietarios_historico").insertOne({
+      proprietario_id: id.trim(),
+      cliente_id: cliente_id.trim(),
+      acao: "desbloqueio",
+      motivo: null,
+      usuario: usuario || null,
+      data: agora,
+      propriedades_afetadas: resultProps.modifiedCount
+    });
+
+    return res.json({
+      sucesso: true,
+      propriedades_reabilitadas: resultProps.modifiedCount
+    });
 
   } catch (err) {
     console.error("💥 Erro ao desbloquear proprietário:", err);
     return res.status(500).json({ erro: err.message });
   }
 });
+
 
 // GET - Buscar proprietário por ID COM verificação de cliente
 app.get("/proprietarios/:id", async (req, res) => {
