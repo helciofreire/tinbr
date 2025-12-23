@@ -1926,34 +1926,58 @@ const pipeline = [
   }
 });
 
-
-
-// 5️⃣ ÚLTIMA ROTA — BUSCAR PROPRIEDADE POR ID (sempre por último!)
-app.get("/propriedades/:id", async (req, res) => {
+// 🔍 VERIFICAR TOKENS VENDIDOS POR PROPRIETÁRIO
+app.get("/proprietarios/:id/verificar-tokens", async (req, res) => {
   try {
     const { id } = req.params;
     const { cliente_id } = req.query;
 
     if (!cliente_id) {
-      return res.status(400).json({ erro: "cliente_id é obrigatório na query" });
+      return res.status(400).json({ ok: false, erro: "cliente_id obrigatório" });
     }
 
-    const propriedade = await db.collection("propriedades").findOne({
-      _id: id,
-      cliente_id
+    const propriedades = await Propriedades.find({
+      cliente_id: String(cliente_id),
+      proprietario_id: String(id)
+    }).lean();
+
+    // ✅ REGRA 1: não tem propriedades → OK
+    if (!propriedades || propriedades.length === 0) {
+      return res.json({ ok: true });
+    }
+
+    let tokensVendidos = 0;
+
+    propriedades.forEach(p => {
+      const vendidos = Number(p.tokenqtd || 0) - Number(p.tokenresto || 0);
+      if (vendidos > 0) {
+        tokensVendidos += vendidos;
+      }
     });
 
-    if (!propriedade) {
-      return res.status(404).json({ erro: "Propriedade não encontrada" });
+    // ✅ REGRA 2: tem propriedades mas não vendeu tokens
+    if (tokensVendidos === 0) {
+      return res.json({ ok: true });
     }
 
-    res.json(propriedade);
+    // ❌ REGRA 3: tem tokens vendidos
+    return res.json({
+      ok: false,
+      motivo: "tokens_vendidos",
+      tokens_vendidos: tokensVendidos
+    });
 
   } catch (err) {
-    console.error("Erro ao buscar propriedade por ID:", err);
-    res.status(500).json({ erro: "Erro ao buscar propriedade por ID" });
+    console.error("💥 Erro verificar tokens:", err);
+    return res.status(500).json({
+      ok: false,
+      erro: "Erro interno ao verificar tokens"
+    });
   }
 });
+
+
+
 
 // BUSCAR PROPRIEDADE POR CIB (global)
 app.get("/propriedades/cib/existe", async (req, res) => {
@@ -2045,6 +2069,33 @@ app.get("/propriedades-por-proprietario", async (req, res) => {
   } catch (erro) {
     console.error("💥 Erro GET /propriedades:", erro);
     return res.status(500).json({ erro: "Erro interno ao buscar propriedades." });
+  }
+});
+
+// 5️⃣ ÚLTIMA ROTA — BUSCAR PROPRIEDADE POR ID (sempre por último!)
+app.get("/propriedades/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { cliente_id } = req.query;
+
+    if (!cliente_id) {
+      return res.status(400).json({ erro: "cliente_id é obrigatório na query" });
+    }
+
+    const propriedade = await db.collection("propriedades").findOne({
+      _id: id,
+      cliente_id
+    });
+
+    if (!propriedade) {
+      return res.status(404).json({ erro: "Propriedade não encontrada" });
+    }
+
+    res.json(propriedade);
+
+  } catch (err) {
+    console.error("Erro ao buscar propriedade por ID:", err);
+    res.status(500).json({ erro: "Erro ao buscar propriedade por ID" });
   }
 });
 
