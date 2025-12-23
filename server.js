@@ -1926,22 +1926,26 @@ const pipeline = [
   }
 });
 
-// 🔍 VERIFICAR TOKENS VENDIDOS POR PROPRIETÁRIO
 app.get("/proprietarios/:id/verificar-tokens", async (req, res) => {
   try {
     const { id } = req.params;
     const { cliente_id } = req.query;
 
-    if (!cliente_id) {
-      return res.status(400).json({ ok: false, erro: "cliente_id obrigatório" });
+    if (!id || !cliente_id) {
+      return res.status(400).json({
+        ok: false,
+        erro: "id ou cliente_id inválido"
+      });
     }
 
-    const propriedades = await Propriedades.find({
-      cliente_id: String(cliente_id),
-      proprietario_id: String(id)
-    }).lean();
+    const propriedades = await db.collection("propriedades")
+      .find({
+        cliente_id: String(cliente_id),
+        proprietario_id: String(id)
+      })
+      .toArray();
 
-    // ✅ REGRA 1: não tem propriedades → OK
+    // ✅ Sem propriedades → OK
     if (!propriedades || propriedades.length === 0) {
       return res.json({ ok: true });
     }
@@ -1949,18 +1953,21 @@ app.get("/proprietarios/:id/verificar-tokens", async (req, res) => {
     let tokensVendidos = 0;
 
     propriedades.forEach(p => {
-      const vendidos = Number(p.tokenqtd || 0) - Number(p.tokenresto || 0);
-      if (vendidos > 0) {
-        tokensVendidos += vendidos;
+      const qtd = Number(p.tokenqtd);
+      const resto = Number(p.tokenresto);
+
+      if (Number.isFinite(qtd) && Number.isFinite(resto)) {
+        const vendidos = qtd - resto;
+        if (vendidos > 0) {
+          tokensVendidos += vendidos;
+        }
       }
     });
 
-    // ✅ REGRA 2: tem propriedades mas não vendeu tokens
     if (tokensVendidos === 0) {
       return res.json({ ok: true });
     }
 
-    // ❌ REGRA 3: tem tokens vendidos
     return res.json({
       ok: false,
       motivo: "tokens_vendidos",
@@ -1971,12 +1978,10 @@ app.get("/proprietarios/:id/verificar-tokens", async (req, res) => {
     console.error("💥 Erro verificar tokens:", err);
     return res.status(500).json({
       ok: false,
-      erro: "Erro interno ao verificar tokens"
+      erro: err.message   // 🔥 MOSTRA O ERRO REAL
     });
   }
 });
-
-
 
 
 // BUSCAR PROPRIEDADE POR CIB (global)
