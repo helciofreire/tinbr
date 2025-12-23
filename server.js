@@ -1926,62 +1926,60 @@ const pipeline = [
   }
 });
 
-app.get("/proprietarios/:id/verificar-tokens", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { cliente_id } = req.query;
+//VERIFICAR TOKENS VENDIDOS
 
-    if (!id || !cliente_id) {
+app.get("/verificar-tokens-vendidos", async (req, res) => {
+  try {
+    const { cliente_id, proprietario_id } = req.query;
+
+    if (!cliente_id || !proprietario_id) {
       return res.status(400).json({
         ok: false,
-        erro: "id ou cliente_id inválido"
+        erro: "cliente_id e proprietario_id são obrigatórios"
       });
     }
 
-    const propriedades = await db.collection("propriedades")
-      .find({
-        cliente_id: String(cliente_id),
-        proprietario_id: String(id)
-      })
-      .toArray();
+    const propriedades = await db.collection("propriedades").find({
+      cliente_id: String(cliente_id),
+      proprietario_id: String(proprietario_id)
+    }).toArray();
 
-    // ✅ Sem propriedades → OK
-    if (!propriedades || propriedades.length === 0) {
+    // ✅ NÃO TEM PROPRIEDADES
+    if (propriedades.length === 0) {
       return res.json({ ok: true });
     }
 
-    let tokensVendidos = 0;
+    let tokensVendidosTotal = 0;
 
-    propriedades.forEach(p => {
-      const qtd = Number(p.tokenqtd);
-      const resto = Number(p.tokenresto);
+    for (const p of propriedades) {
+      const tokenqtd = Number(p.tokenqtd || 0);
+      const tokenresto = Number(p.tokenresto || 0);
 
-      if (Number.isFinite(qtd) && Number.isFinite(resto)) {
-        const vendidos = qtd - resto;
-        if (vendidos > 0) {
-          tokensVendidos += vendidos;
-        }
+      if (tokenresto < tokenqtd) {
+        tokensVendidosTotal += (tokenqtd - tokenresto);
       }
-    });
-
-    if (tokensVendidos === 0) {
-      return res.json({ ok: true });
     }
 
-    return res.json({
-      ok: false,
-      motivo: "tokens_vendidos",
-      tokens_vendidos: tokensVendidos
-    });
+    // ❌ EXISTEM TOKENS VENDIDOS
+    if (tokensVendidosTotal > 0) {
+      return res.json({
+        ok: false,
+        tokens_vendidos: tokensVendidosTotal
+      });
+    }
+
+    // ✅ NENHUM TOKEN VENDIDO
+    return res.json({ ok: true });
 
   } catch (err) {
     console.error("💥 Erro verificar tokens:", err);
     return res.status(500).json({
       ok: false,
-      erro: err.message   // 🔥 MOSTRA O ERRO REAL
+      erro: "Erro interno ao verificar tokens"
     });
   }
 });
+
 
 
 // BUSCAR PROPRIEDADE POR CIB (global)
