@@ -186,6 +186,40 @@ app.get("/proprietarios/bloqueados", async (req, res) => {
   }
 });
 
+// LISTAR PROPRIETÁRIOS ATIVOS (PARA DROPDOWN)
+app.get("/proprietarios/ativos", async (req, res) => {
+  try {
+    const { cliente_id } = req.query;
+
+    if (!cliente_id) {
+      return res.status(400).json({ erro: "cliente_id é obrigatório" });
+    }
+
+    const proprietarios = await db.collection("proprietarios")
+      .find(
+        {
+          cliente_id: cliente_id.trim(),
+          situacao: { $ne: "bloqueado" },       // 🚫 exclui bloqueados
+          status_vinculo: { $ne: "encerrado" }  // 🚫 exclui encerrados
+        },
+        {
+          projection: {
+            _id: 1,
+            razao: 1
+          }
+        }
+      )
+      .sort({ razao: 1 })
+      .toArray();
+
+    res.json(proprietarios);
+
+  } catch (err) {
+    console.error("Erro ao listar proprietários ativos:", err);
+    res.status(500).json({ erro: "Erro ao listar proprietários ativos" });
+  }
+});
+
 
 // GET - Buscar proprietário por CPF do responsável COM verificação de cliente
 app.get("/proprietarios/responsavel/:cpfresp", async (req, res) => {
@@ -211,6 +245,8 @@ app.get("/proprietarios/responsavel/:cpfresp", async (req, res) => {
     res.status(500).json({ erro: "Erro ao buscar proprietário por responsável" });
   }
 });
+
+
 
 // BLOQUEAR PROPRIETÁRIO + PROPRIEDADES (COM DADOS DE BLOQUEIO)
 app.patch("/proprietarios/bloquear", async (req, res) => {
