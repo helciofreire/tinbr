@@ -1525,6 +1525,40 @@ app.get("/propriedades/tipos-por-cliente", async (req, res) => {
   }
 });
 
+// ================= PROPRIEDADES POR TIPO (SEM FILTRO DE STATUS) =================
+app.get("/propriedades/por-tipo", async (req, res) => {
+  try {
+    const { cliente_id, tipo } = req.query;
+
+    if (!cliente_id || !tipo) {
+      return res.status(400).json({
+        erro: "cliente_id e tipo são obrigatórios"
+      });
+    }
+
+    const filter = {
+      cliente_id: String(cliente_id),
+      tipo: tipo.trim()
+    };
+
+    const propriedades = await db
+      .collection("propriedades")
+      .find(filter)
+      .sort({ razao: 1 })
+      .toArray();
+
+    // ✅ Sempre retorna array (mesmo vazio)
+    return res.json(propriedades);
+
+  } catch (err) {
+    console.error("Erro /propriedades/por-tipo:", err);
+    return res.status(500).json({
+      erro: "Erro interno ao buscar propriedades por tipo"
+    });
+  }
+});
+
+
 
 //===========================TIPO POR CLIENTE E MUNICIPIO====================
 
