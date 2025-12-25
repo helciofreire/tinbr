@@ -1827,7 +1827,7 @@ app.get("/propriedades-tabela-por-proprietario", async (req, res) => {
         _id: 1,
 	proprietario_id: 1,
         tipo: 1,
-        razao: 1,
+        referencia: 1,
         status: 1,
         tokenqtd: 1,
         tokenresto: 1,
