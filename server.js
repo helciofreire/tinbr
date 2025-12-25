@@ -1886,7 +1886,7 @@ app.get("/propriedades/municipio", async (req, res) => {
 
 
 // LISTAR PROPRIEDADES (dropdown) POR CLIENTE + PROPRIETÁRIO
-app.get("/propriedades-por-proprietario", async (req, res) => {
+app.get("/propriedades-por-proprietario/dropdown", async (req, res) => {
   try {
     const { cliente_id, proprietario_id } = req.query;
 
@@ -2043,37 +2043,37 @@ app.get("/propriedades/referencia/existe", async (req, res) => {
 });
 
 
-//GET LISTAR PROPRIEDADES POR CLIENTE E PROPRIETÁRIO
-
+// GET LISTAR PROPRIEDADES POR CLIENTE E PROPRIETÁRIO (DADOS COMPLETOS)
 app.get("/propriedades-por-proprietario", async (req, res) => {
   try {
     const { cliente_id, proprietario_id } = req.query;
 
-    if (!cliente_id) {
-      return res.status(400).json({ erro: "cliente_id é obrigatório." });
-    }
-    if (!proprietario_id) {
-      return res.status(400).json({ erro: "proprietario_id é obrigatório." });
-    }
-
-    console.log("📌 GET /propriedades", { cliente_id, proprietario_id });
-
-    const propriedades = await Propriedades.find({
-      cliente_id: String(cliente_id),
-      proprietario_id: String(proprietario_id)
-    }).lean();
-
-    if (!propriedades || propriedades.length === 0) {
-      return res.status(404).json({ erro: "Nenhuma propriedade encontrada." });
+    if (!cliente_id || !proprietario_id) {
+      return res.status(400).json({
+        erro: "cliente_id e proprietario_id são obrigatórios."
+      });
     }
 
+    const propriedades = await db
+      .collection("propriedades")
+      .find({
+        cliente_id: String(cliente_id),
+        proprietario_id: String(proprietario_id)
+      })
+      .toArray();
+
+    // ✅ retorno consistente (array vazio é OK)
     return res.json(propriedades);
 
-  } catch (erro) {
-    console.error("💥 Erro GET /propriedades:", erro);
-    return res.status(500).json({ erro: "Erro interno ao buscar propriedades." });
+  } catch (err) {
+    console.error("💥 Erro GET /propriedades-por-proprietario:", err);
+    return res.status(500).json({
+      erro: "Erro interno ao buscar propriedades."
+    });
   }
 });
+
+
 
 // 5️⃣ ÚLTIMA ROTA — BUSCAR PROPRIEDADE POR ID (sempre por último!)
 app.get("/propriedades/:id", async (req, res) => {
