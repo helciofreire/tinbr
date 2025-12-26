@@ -1560,16 +1560,28 @@ app.get("/propriedades/por-tipo", async (req, res) => {
 
 
 
-//===========================TIPO POR CLIENTE E MUNICIPIO====================
-
+//===========================TIPO POR CLIENTE E MUNICIPIO (SOMENTE ATIVOS)====================
 app.get("/propriedades/tipos", async (req, res) => {
   try {
     const { cliente_id, municipio } = req.query;
-    if (!cliente_id)
+
+    if (!cliente_id) {
       return res.status(400).json({ erro: "cliente_id é obrigatório" });
+    }
+
+    // 🧠 Match seguro
+    const match = {
+      cliente_id: String(cliente_id),
+      status: "ativo"
+    };
+
+    // municipio é opcional
+    if (municipio) {
+      match.municipio = municipio;
+    }
 
     const pipeline = [
-      { $match: { cliente_id, municipio } },
+      { $match: match },
       {
         $group: {
           _id: "$tipo"
@@ -1602,6 +1614,7 @@ app.get("/propriedades/tipos", async (req, res) => {
     res.status(500).json({ erro: "Erro ao buscar tipos" });
   }
 });
+
 
 
 // ======================= FASES DE PROPRIEDADE POR CLIENTE =======================
