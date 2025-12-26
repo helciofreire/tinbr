@@ -1799,6 +1799,23 @@ app.get("/propriedades-por-fase", async (req, res) => {
       .sort({ referencia: 1 })
       .toArray();
 
+    // 🟡 Nenhuma encontrada
+    if (!propriedades || propriedades.length === 0) {
+      return res.json([]);
+    }
+
+    // ✅ Lista permitida
+    return res.json(propriedades);
+
+  } catch (err) {
+    console.error("Erro propriedades-por-fase:", err);
+    return res.status(500).json({
+      erro: "Erro interno ao buscar propriedades"
+    });
+  }
+});
+
+
 
 
 // ================= PROPRIEDADE POR REFERÊNCIA + NÍVEL =================
