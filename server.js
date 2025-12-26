@@ -1738,6 +1738,64 @@ app.get("/propriedades/municipios", async (req, res) => {
   }
 });
 
+// ================= PROPRIEDADES POR FASE + NÍVEL (LISTAGEM) =================
+app.get("/propriedades-por-fase", async (req, res) => {
+  try {
+    const { cliente_id, fase, nivel } = req.query;
+
+    if (!cliente_id || !fase || nivel === undefined) {
+      return res.status(400).json({
+        erro: "cliente_id, fase e nivel são obrigatórios"
+      });
+    }
+
+    const nivelNum = Number(nivel);
+    if (Number.isNaN(nivelNum)) {
+      return res.status(400).json({ erro: "nivel deve ser numérico" });
+    }
+
+    // 🔎 Filtro base
+    const filtro = {
+      cliente_id: String(cliente_id),
+      fase: String(fase)
+    };
+
+    // 🔒 Regra de nível
+    if (nivelNum <= 3) {
+      filtro.status = "ativo";
+    }
+
+    const propriedades = await db
+      .collection("propriedades")
+      .find(filtro)
+      .project({
+        _id: 1,
+        status: 1,
+        tipo: 1,
+        referencia: 1,
+        municipio: 1,
+        ibge: 1
+      })
+      .sort({ referencia: 1 })
+      .toArray();
+
+    // 🟡 Nenhuma encontrada
+    if (propriedades.length === 0) {
+      return res.json([]);
+    }
+
+    // ✅ Lista permitida
+    return res.json(propriedades);
+
+  } catch (err) {
+    console.error("Erro propriedades-por-fase:", err);
+    res.status(500).json({
+      erro: "Erro interno ao buscar propriedades"
+    });
+  }
+});
+
+
 // ================= PROPRIEDADE POR REFERÊNCIA + NÍVEL =================
 app.get("/propriedades/por-referencia", async (req, res) => {
   try {
