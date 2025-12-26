@@ -1905,6 +1905,31 @@ app.get("/propriedades-tabela-por-cliente", async (req, res) => {
   }
 });
 
+// 3️⃣ LISTAR TODAS AS PROPRIEDADES POR MUNICÍPIO
+app.get("/propriedades/todas-por-municipio", async (req, res) => {
+  try {
+    const { ibge, cliente_id } = req.query;
+
+    if (!ibge) return res.status(400).json({ erro: "ibge é obrigatório" });
+    if (!cliente_id) return res.status(400).json({ erro: "cliente_id é obrigatório" });
+
+    const propriedades = await db
+      .collection("propriedades")
+      .find({
+        ibge,
+        cliente_id,
+   })
+      .sort({ municipio: 1 })
+      .toArray();
+
+    res.json(propriedades);
+
+  } catch (err) {
+    console.error("Erro ao buscar propriedades por Município:", err);
+    res.status(500).json({ erro: "Erro ao buscar propriedades por Município" });
+  }
+});
+
 // 3️⃣ LISTAR PROPRIEDADES POR MUNICÍPIO
 app.get("/propriedades/municipio", async (req, res) => {
   try {
