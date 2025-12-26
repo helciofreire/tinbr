@@ -1764,8 +1764,8 @@ app.get("/propriedades-por-fase", async (req, res) => {
     };
 
     // 🔒 Regra de privilégio
-    // nível <= 3 → só ativos
-    if (nivelNum <= 3) {
+    // nível >= 3 → só ativos
+    if (nivelNum >= 3) {
       filtro.status = "ativo";
     }
 
