@@ -1493,6 +1493,8 @@ app.get("/propriedades/categorias-municipio", async (req, res) => {
   }
 });
 
+
+//===========================CATEGORIAS DE PROPRIEDADES POR CLIENTE E MUNICIPIO====================
 app.get("/propriedades-por-categoria-ibge", async (req, res) => {
   try {
     const { categoria, ibge, cliente_id } = req.query;
@@ -1529,7 +1531,51 @@ app.get("/propriedades-por-categoria-ibge", async (req, res) => {
     res.json(propriedades);
 
   } catch (err) {
-    console.error("Erro propriedades/por-categoria-ibge:", err);
+    console.error("Erro propriedades-por-categoria-ibge:", err);
+    res.status(500).json({
+      erro: "Erro interno ao buscar propriedades"
+    });
+  }
+});
+
+//===========================CATEGORIAS DE PROPRIEDADES POR CLIENTE E MUNICIPIO====================
+app.get("/propriedades-por-fase-ibge", async (req, res) => {
+  try {
+    const { fase, ibge, cliente_id } = req.query;
+
+    if (!fase || !ibge || !cliente_id) {
+      return res.status(400).json({
+        erro: "fase, ibge e cliente_id são obrigatórios"
+      });
+    }
+
+    const filtro = {
+      cliente_id,
+      fase,
+      ibge,
+      status: "ativo"
+    };
+
+    const propriedades = await db
+      .collection("propriedades")
+      .find(filtro)
+      .project({
+        _id: 1,
+        referencia: 1,
+	razao: 1,
+        fase: 1,
+        tipo: 1,
+        valor: 1,
+        municipio: 1,
+        ibge: 1,
+        status: 1
+      })
+      .toArray();
+
+    res.json(propriedades);
+
+  } catch (err) {
+    console.error("Erro propriedades-por-fase-ibge:", err);
     res.status(500).json({
       erro: "Erro interno ao buscar propriedades"
     });
