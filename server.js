@@ -1442,7 +1442,7 @@ app.get("/propriedades/categorias-por-cliente", async (req, res) => {
 });
 
 //===========================CATEGORIAS POR CLIENTE E MUNICIPIO====================
-app.get("/propriedades/categorias-municipio", async (req, res) => {
+app.get("/propriedades-categorias-municipio", async (req, res) => {
   try {
     const { cliente_id, ibge } = req.query;
 
@@ -1761,14 +1761,24 @@ app.get("/propriedades/fases-por-cliente", async (req, res) => {
 
 // ======================= FASES DE PROPRIEDADE POR CLIENTE E MUNICIPIO=======================
 
-app.get("/propriedades/fases", async (req, res) => {
+app.get("/propriedades-fases-municipio", async (req, res) => {
   try {
-    const { cliente_id, municipio } = req.query;
+    const { cliente_id, ibge } = req.query;
+
     if (!cliente_id)
       return res.status(400).json({ erro: "cliente_id é obrigatório" });
 
+    if (!ibge)
+      return res.status(400).json({ erro: "ibge é obrigatório" });
+
     const pipeline = [
-      { $match: { cliente_id, municipio } },
+      {
+        $match: {
+          cliente_id,
+          ibge,
+          status: "ativo" // ✅ FILTRO ADICIONADO
+        }
+      },
       {
         $group: {
           _id: "$fase"
