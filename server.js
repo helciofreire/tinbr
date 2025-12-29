@@ -1816,7 +1816,7 @@ app.get("/propriedades-por-fase", async (req, res) => {
 });
 
 
-// ================= PROPRIEDADES POR FASE + NÍVEL (LISTAGEM) =================
+// ================= PROPRIEDADES POR CATEGORIA + NÍVEL (LISTAGEM) =================
 app.get("/categoria-vendedor", async (req, res) => {
   try {
     const { cliente_id, categoria, nivel } = req.query;
@@ -1933,7 +1933,9 @@ app.get("/propriedades/por-referencia", async (req, res) => {
     // ✅ Permitido
     return res.json({
       _id: propriedade._id, // já string
-      status: propriedade.status
+      status: propriedade.status,
+      municipio: propriedade.municipio,
+      ibge: propriedade.obge	
     });
 
   } catch (err) {
