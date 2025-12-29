@@ -1516,6 +1516,7 @@ app.get("/propriedades-por-categoria-ibge", async (req, res) => {
       .project({
         _id: 1,
         referencia: 1,
+	razao: 1,
         categoria: 1,
         tipo: 1,
         valor: 1,
