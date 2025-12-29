@@ -1935,7 +1935,7 @@ app.get("/propriedades/por-referencia", async (req, res) => {
       _id: propriedade._id, // já string
       status: propriedade.status,
       municipio: propriedade.municipio,
-      ibge: propriedade.obge	
+      ibge: propriedade.ibge	
     });
 
   } catch (err) {
