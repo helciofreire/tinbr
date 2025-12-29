@@ -1441,7 +1441,6 @@ app.get("/propriedades/categorias-por-cliente", async (req, res) => {
   }
 });
 
-//===========================CATEGORIAS POR CLIENTE E MUNICIPIO====================
 app.get("/propriedades/categorias-municipio", async (req, res) => {
   try {
     const { cliente_id, ibge } = req.query;
@@ -1453,7 +1452,13 @@ app.get("/propriedades/categorias-municipio", async (req, res) => {
       return res.status(400).json({ erro: "ibge é obrigatório" });
 
     const pipeline = [
-      { $match: { cliente_id, ibge } },
+      {
+        $match: {
+          cliente_id,
+          ibge,
+          status: "ativo" // ✅ FILTRO ADICIONADO
+        }
+      },
       {
         $group: {
           _id: "$categoria"
