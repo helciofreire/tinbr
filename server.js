@@ -1913,7 +1913,14 @@ app.get("/propriedades/por-referencia", async (req, res) => {
     // 🔍 Busca básica
     const propriedade = await db.collection("propriedades").findOne(
       { cliente_id, referencia },
-      { projection: { _id: 1, status: 1 } }
+  {
+    projection: {
+      _id: 1,
+      status: 1,
+      municipio: 1,
+      ibge: 1
+    }
+  }
     );
 
     // ❌ Não encontrou
