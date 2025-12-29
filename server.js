@@ -1538,7 +1538,7 @@ app.get("/propriedades-por-categoria-ibge", async (req, res) => {
   }
 });
 
-//===========================CATEGORIAS DE PROPRIEDADES POR CLIENTE E MUNICIPIO====================
+//===========================FASES DE PROPRIEDADES POR CLIENTE E MUNICIPIO====================
 app.get("/propriedades-por-fase-ibge", async (req, res) => {
   try {
     const { fase, ibge, cliente_id } = req.query;
@@ -1582,6 +1582,50 @@ app.get("/propriedades-por-fase-ibge", async (req, res) => {
   }
 });
 
+
+//===========================TIPOS DE PROPRIEDADES POR CLIENTE E MUNICIPIO====================
+app.get("/propriedades-por-tipo-ibge", async (req, res) => {
+  try {
+    const { tipo, ibge, cliente_id } = req.query;
+
+    if (!tipo || !ibge || !cliente_id) {
+      return res.status(400).json({
+        erro: "tipo, ibge e cliente_id são obrigatórios"
+      });
+    }
+
+    const filtro = {
+      cliente_id,
+      tipo,
+      ibge,
+      status: "ativo"
+    };
+
+    const propriedades = await db
+      .collection("propriedades")
+      .find(filtro)
+      .project({
+        _id: 1,
+        referencia: 1,
+	razao: 1,
+        categoria: 1,
+        tipo: 1,
+        valor: 1,
+        municipio: 1,
+        ibge: 1,
+        status: 1
+      })
+      .toArray();
+
+    res.json(propriedades);
+
+  } catch (err) {
+    console.error("Erro propriedades-por-tipo-ibge:", err);
+    res.status(500).json({
+      erro: "Erro interno ao buscar propriedades"
+    });
+  }
+});
 
 // ======================= TIPOS DE PROPRIEDADE POR CLIENTE=======================
 app.get("/propriedades/tipos-por-cliente", async (req, res) => {
@@ -1715,6 +1759,57 @@ app.get("/propriedades/tipos", async (req, res) => {
   }
 });
 
+//===========================TIPOS POR CLIENTE E MUNICIPIO====================
+app.get("/propriedades-tipos-municipio", async (req, res) => {
+  try {
+    const { cliente_id, ibge } = req.query;
+
+    if (!cliente_id)
+      return res.status(400).json({ erro: "cliente_id é obrigatório" });
+
+    if (!ibge)
+      return res.status(400).json({ erro: "ibge é obrigatório" });
+
+    const pipeline = [
+      {
+        $match: {
+          cliente_id,
+          ibge,
+          status: "ativo" // ✅ FILTRO ADICIONADO
+        }
+      },
+      {
+        $group: {
+          _id: "$tipo"
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          label: {
+            $concat: [
+              { $toUpper: { $substrCP: ["$_id", 0, 1] } },
+              { $substrCP: ["$_id", 1, { $strLenCP: "$_id" }] }
+            ]
+          },
+          value: "$_id"
+        }
+      },
+      { $sort: { label: 1 } }
+    ];
+
+    const tipos = await db
+      .collection("propriedades")
+      .aggregate(pipeline)
+      .toArray();
+
+    res.json(tipos);
+
+  } catch (err) {
+    console.error("Erro ao buscar tipos:", err);
+    res.status(500).json({ erro: "Erro ao buscar tipos" });
+  }
+});
 
 
 // ======================= FASES DE PROPRIEDADE POR CLIENTE =======================
