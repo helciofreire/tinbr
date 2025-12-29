@@ -1442,7 +1442,7 @@ app.get("/propriedades/categorias-por-cliente", async (req, res) => {
 });
 
 //===========================CATEGORIAS POR CLIENTE E MUNICIPIO====================
-app.get("/propriedades/categorias", async (req, res) => {
+app.get("/propriedades/categorias-municipio", async (req, res) => {
   try {
     const { cliente_id, municipio } = req.query;
     if (!cliente_id)
