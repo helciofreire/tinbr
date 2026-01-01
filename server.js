@@ -340,7 +340,7 @@ app.patch("/proprietarios/bloquear", async (req, res) => {
 app.patch("/proprietarios/:id/desbloquear", async (req, res) => {
   try {
     const { id } = req.params; // proprietario_id
-    const { cliente_id, usuario } = req.body;
+    const { cliente_id, dados_desbloqueio, nome } = req.body;
 
     if (!cliente_id) {
       return res.status(400).json({ erro: "cliente_id é obrigatório" });
@@ -367,7 +367,7 @@ app.patch("/proprietarios/:id/desbloquear", async (req, res) => {
       return res.status(404).json({ erro: "Proprietário não encontrado" });
     }
 
-    // 2️⃣ Reativa TODAS as propriedades do proprietário
+    // 2️⃣ Reativa TODAS as propriedades
     const resultProps = await db.collection("propriedades").updateMany(
       {
         proprietario_id: id.trim(),
@@ -381,13 +381,13 @@ app.patch("/proprietarios/:id/desbloquear", async (req, res) => {
       }
     );
 
-    // 3️⃣ Registra histórico
+    // 3️⃣ HISTÓRICO (DESBLOQUEIO)
     await db.collection("proprietarios_historico").insertOne({
       proprietario_id: id.trim(),
       cliente_id: cliente_id.trim(),
       acao: "desbloqueio",
-      motivo: "Ação do usuário",
-      usuario: usuario || null,
+      motivo: dados_desbloqueio?.motivo_exclusao || "Ação do usuário",
+      usuario: nome || null,
       data: agora,
       propriedades_afetadas: resultProps.modifiedCount
     });
