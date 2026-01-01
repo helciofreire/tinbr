@@ -316,7 +316,7 @@ app.patch("/proprietarios/bloquear", async (req, res) => {
       cliente_id: cliente_id.trim(),
       acao: "bloqueio", // ou ACAO_HISTORICO.BLOQUEIO
       motivo: dados_bloqueio.motivo_exclusao || null,
-      usuario: dados_bloqueio.usuario || null,
+      usuario: usuario || null,
       data: agora,
       propriedades_afetadas: resultProps.modifiedCount
     });
@@ -385,7 +385,7 @@ app.patch("/proprietarios/:id/desbloquear", async (req, res) => {
       proprietario_id: id.trim(),
       cliente_id: cliente_id.trim(),
       acao: "desbloqueio",
-      motivo: null,
+      motivo: "Ação do usuário",
       usuario: usuario || null,
       data: agora,
       propriedades_afetadas: resultProps.modifiedCount
