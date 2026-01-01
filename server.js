@@ -257,9 +257,9 @@ app.get("/proprietarios/responsavel/:cpfresp", async (req, res) => {
 // ⛔ BLOQUEAR PROPRIETÁRIO + PROPRIEDADES (COM HISTÓRICO)
 app.patch("/proprietarios/bloquear", async (req, res) => {
   try {
-    const { cliente_id, dados_bloqueio } = req.body;
+    const { cliente_id, dados_bloqueio, nome } = req.body;
 
-    console.log("⛔ Bloqueio avançado:", { cliente_id, dados_bloqueio });
+    console.log("⛔ Bloqueio avançado:", { cliente_id, dados_bloqueio, nome });
 
     if (!cliente_id) {
       return res.status(400).json({ erro: "cliente_id é obrigatório" });
@@ -305,6 +305,7 @@ app.patch("/proprietarios/bloquear", async (req, res) => {
         $set: {
           status: "bloqueado",
           motivo_bloqueio: dados_bloqueio.motivo_exclusao || null,
+	  usuario: nome,
           atualizadoEm: agora
         }
       }
@@ -316,7 +317,7 @@ app.patch("/proprietarios/bloquear", async (req, res) => {
       cliente_id: cliente_id.trim(),
       acao: "bloqueio", // ou ACAO_HISTORICO.BLOQUEIO
       motivo: dados_bloqueio.motivo_exclusao || null,
-      usuario: usuario || null,
+      usuario: nome || null,
       data: agora,
       propriedades_afetadas: resultProps.modifiedCount
     });
