@@ -286,11 +286,11 @@ app.patch("/proprietarios/bloquear", async (req, res) => {
       {
         $set: {
           status_vinculo: dados_bloqueio.status_vinculo || "bloqueado",
-          motivo_exclusao: dados_bloqueio.motivo_exclusao || null,
+          motivo_bloqueio: dados_bloqueio.motivo_bloqueio || null,
           data_inicio_exclusao: agora,
           prazo_confirmacao: dados_bloqueio.prazo_confirmacao ?? 0,
           bloqueio_assinatura_gestor: !!dados_bloqueio.bloqueio_assinatura_gestor,
-          plataforma_arbitro_ativo: !!dados_bloqueio.plataforma_arbitro_ativo,
+          plataforma_arbitro_ativo: true,
           novo_gestor_indicado: dados_bloqueio.novo_gestor_indicado || null,
           data_encerramento: null,
           situacao: "bloqueado",
@@ -312,7 +312,7 @@ app.patch("/proprietarios/bloquear", async (req, res) => {
       {
         $set: {
           status: "bloqueado",
-          motivo_bloqueio: dados_bloqueio.motivo_exclusao || null,
+          motivo_bloqueio: dados_bloqueio.motivo_bloqueio || null,
           usuario_bloqueio: nome || null,
           atualizadoEm: agora
         }
@@ -324,7 +324,7 @@ app.patch("/proprietarios/bloquear", async (req, res) => {
       proprietario_id,
       cliente_id: String(cliente_id).trim(),
       acao: "bloqueio",
-      motivo: dados_bloqueio.motivo_exclusao || null,
+      motivo: dados_bloqueio.motivo_bloqueio || null,
       usuario: nome || null,
       data: agora,
       propriedades_afetadas: resultProps.modifiedCount
@@ -365,11 +365,11 @@ app.patch("/proprietarios/:id/desbloquear", async (req, res) => {
         $set: {
           status_vinculo: "ativo",
           situacao: "ativo",
-          motivo_exclusao: null,
+          motivo_bloqueio: null,
           data_inicio_exclusao: null,
           prazo_confirmacao: null,
           bloqueio_assinatura_gestor: false,
-          plataforma_arbitro_ativo: false,
+          plataforma_arbitro_ativo: true,
           novo_gestor_indicado: null,
           data_encerramento: agora,
           atualizadoEm: agora
