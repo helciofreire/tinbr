@@ -486,6 +486,110 @@ app.post("/proprietarios", async (req, res) => {
   }
 });
 
+// GET - Buscar proprietários ATIVOS por CPF do responsável
+app.get("/proprietarios/ativos-por-responsavel/:cpfresp", async (req, res) => {
+  try {
+    const { cpfresp } = req.params;
+    const { cliente_id } = req.query;
+
+    if (!cliente_id) {
+      return res.status(400).json({
+        erro: "cliente_id é obrigatório na query"
+      });
+    }
+
+    // 🔍 Busca SOMENTE ativos
+    const proprietarios = await db.collection("proprietarios")
+      .find({
+        cpfresp: cpfresp,
+        cliente_id: cliente_id,
+        situacao: "ativo" // ✅ filtro principal
+      })
+      .toArray();
+
+    // 🔹 CASO 0 — nenhum ativo
+    if (!proprietarios || proprietarios.length === 0) {
+      return res.json({
+        quantidade: 0
+      });
+    }
+
+    // 🔹 CASO 1 — retorna JSON completo
+    if (proprietarios.length === 1) {
+      return res.json({
+        quantidade: 1,
+        proprietario: proprietarios[0]
+      });
+    }
+
+    // 🔹 CASO > 1 — retorna lista resumida (dropdown)
+    const listaDropdown = proprietarios.map(p => ({
+      _id: p._id,
+      razao: p.razao
+    }));
+
+    return res.json({
+      quantidade: proprietarios.length,
+      proprietarios: listaDropdown
+    });
+
+  } catch (err) {
+    console.error("Erro ao buscar proprietários ativos por responsável:", err);
+    return res.status(500).json({
+      erro: "Erro ao buscar proprietários ativos por responsável"
+    });
+  }
+});
+
+
+
+// GET - Buscar proprietários BLOQUEADOS por CPF do responsável
+app.get("/proprietarios/bloqueados-por-responsavel/:cpfresp", async (req, res) => {
+  try {
+    const { cpfresp } = req.params;
+    const { cliente_id } = req.query;
+
+    if (!cliente_id) {
+      return res.status(400).json({
+        erro: "cliente_id é obrigatório na query"
+      });
+    }
+
+    // 🔍 Busca SOMENTE bloqueados
+    const proprietarios = await db.collection("proprietarios")
+      .find({
+        cpfresp: cpfresp,
+        cliente_id: cliente_id,
+        situacao: "bloqueado" // ✅ filtro principal
+      })
+      .project({
+        _id: 1,
+        razao: 1
+      })
+      .toArray();
+
+    // 🔹 CASO 0 — nenhum bloqueado
+    if (!proprietarios || proprietarios.length === 0) {
+      return res.json({
+        quantidade: 0
+      });
+    }
+
+    // 🔹 CASO >= 1 — sempre retorna lista resumida (dropdown)
+    return res.json({
+      quantidade: proprietarios.length,
+      proprietarios
+    });
+
+  } catch (err) {
+    console.error("Erro ao buscar proprietários bloqueados por responsável:", err);
+    return res.status(500).json({
+      erro: "Erro ao buscar proprietários bloqueados por responsável"
+    });
+  }
+});
+
+
 // PUT - Atualizar proprietário COM verificação de cliente
 app.put("/proprietarios/:id", async (req, res) => {
   try {
