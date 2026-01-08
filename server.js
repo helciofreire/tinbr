@@ -446,45 +446,7 @@ app.get("/proprietarios/:id", async (req, res) => {
   }
 });
 
-// POST - Criar novo proprietário COM cliente_id
-app.post("/proprietarios", async (req, res) => {
-  try {
-    const dados = req.body;
-    
-    // ✅ Validação obrigatória
-    if (!dados.cliente_id) {
-      return res.status(400).json({ erro: "cliente_id é obrigatório no body" });
-    }
-    
-    // ✅ Verifica se já existe no MESMO cliente
-    if (dados.documento) {
-      const existente = await db.collection("proprietarios").findOne({
-        documento: dados.documento,
-        cliente_id: dados.cliente_id
-      });
-      
-      if (existente) {
-        return res.status(400).json({ 
-          erro: "Proprietário já cadastrado para este cliente" 
-        });
-      }
-    }
-    
-    dados.criadoEm = new Date();
-    dados.atualizadoEm = new Date();
-    
-    const resultado = await db.collection("proprietarios").insertOne(dados);
-    
-    res.json({ 
-      sucesso: true, 
-      _id: resultado.insertedId,
-      mensagem: "Proprietário criado com sucesso"
-    });
-    
-  } catch (err) {
-    res.status(500).json({ erro: "Erro ao criar proprietário" });
-  }
-});
+
 
 // GET - Buscar proprietários ATIVOS por CPF do responsável
 app.get("/proprietarios/ativos-por-responsavel/:cpfresp", async (req, res) => {
@@ -555,27 +517,34 @@ app.get("/proprietarios/bloqueados-por-responsavel/:cpfresp", async (req, res) =
       });
     }
 
-    // 🔍 Busca SOMENTE bloqueados
-    const proprietarios = await db.collection("proprietarios")
+    // 🔍 Busca TODOS os bloqueados (sem project)
+    const lista = await db.collection("proprietarios")
       .find({
-        cpfresp: cpfresp,
-        cliente_id: cliente_id,
-        situacao: "bloqueado" // ✅ filtro principal
-      })
-      .project({
-        _id: 1,
-        razao: 1
+        cpfresp,
+        cliente_id,
+        situacao: "bloqueado"
       })
       .toArray();
 
-    // 🔹 CASO 0 — nenhum bloqueado
-    if (!proprietarios || proprietarios.length === 0) {
+    // 🔹 CASO 0
+    if (!lista || lista.length === 0) {
+      return res.json({ quantidade: 0 });
+    }
+
+    // 🔹 CASO 1 → retorna JSON COMPLETO
+    if (lista.length === 1) {
       return res.json({
-        quantidade: 0
+        quantidade: 1,
+        proprietario: lista[0]
       });
     }
 
-    // 🔹 CASO >= 1 — sempre retorna lista resumida (dropdown)
+    // 🔹 CASO > 1 → monta dropdown resumido
+    const proprietarios = lista.map(p => ({
+      _id: p._id,
+      razao: p.razao
+    }));
+
     return res.json({
       quantidade: proprietarios.length,
       proprietarios
@@ -586,6 +555,47 @@ app.get("/proprietarios/bloqueados-por-responsavel/:cpfresp", async (req, res) =
     return res.status(500).json({
       erro: "Erro ao buscar proprietários bloqueados por responsável"
     });
+  }
+});
+
+
+// POST - Criar novo proprietário COM cliente_id
+app.post("/proprietarios", async (req, res) => {
+  try {
+    const dados = req.body;
+    
+    // ✅ Validação obrigatória
+    if (!dados.cliente_id) {
+      return res.status(400).json({ erro: "cliente_id é obrigatório no body" });
+    }
+    
+    // ✅ Verifica se já existe no MESMO cliente
+    if (dados.documento) {
+      const existente = await db.collection("proprietarios").findOne({
+        documento: dados.documento,
+        cliente_id: dados.cliente_id
+      });
+      
+      if (existente) {
+        return res.status(400).json({ 
+          erro: "Proprietário já cadastrado para este cliente" 
+        });
+      }
+    }
+    
+    dados.criadoEm = new Date();
+    dados.atualizadoEm = new Date();
+    
+    const resultado = await db.collection("proprietarios").insertOne(dados);
+    
+    res.json({ 
+      sucesso: true, 
+      _id: resultado.insertedId,
+      mensagem: "Proprietário criado com sucesso"
+    });
+    
+  } catch (err) {
+    res.status(500).json({ erro: "Erro ao criar proprietário" });
   }
 });
 
