@@ -667,6 +667,47 @@ app.delete("/proprietarios/:id", async (req, res) => {
   }
 });
 
+//======================== COMPRADORES ====================
+// GET - Buscar comprador por documento
+app.get("/compradores/por-documento/:documento", async (req, res) => {
+  try {
+    const { documento } = req.params;
+
+    if (!documento) {
+      return res.status(400).json({
+        erro: "Documento é obrigatório"
+      });
+    }
+
+    // Remove caracteres não numéricos (CPF/CNPJ)
+    const documentoLimpo = documento.replace(/\D/g, "");
+
+    const comprador = await db.collection("compradores").findOne({
+      documento: documentoLimpo
+    });
+
+    if (!comprador) {
+      return res.status(200).json({
+        encontrado: false,
+        status: "nok"
+      });
+    }
+
+    return res.status(200).json({
+      encontrado: true,
+      status: "ok",
+      comprador
+    });
+
+  } catch (error) {
+    console.error("Erro ao buscar comprador:", error);
+    return res.status(500).json({
+      erro: "Erro interno do servidor"
+    });
+  }
+});
+
+
 // ======================= CLIENTES =======================
 
 // GET - Listar todos os clientes
