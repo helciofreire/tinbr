@@ -707,6 +707,58 @@ app.get("/compradores/por-documento/:documento", async (req, res) => {
   }
 });
 
+// PUT - Atualizar comprador por ID (string)
+app.put("/compradores/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { dados } = req.body;
+
+    if (!id) {
+      return res.status(400).json({
+        erro: "ID é obrigatório"
+      });
+    }
+
+    if (!dados || typeof dados !== "object") {
+      return res.status(400).json({
+        erro: "Objeto 'dados' é obrigatório para atualização"
+      });
+    }
+
+    // Verifica se o comprador existe
+    const compradorExistente = await db.collection("compradores").findOne({
+      _id: id
+    });
+
+    if (!compradorExistente) {
+      return res.status(404).json({
+        encontrado: false,
+        status: "nok",
+        mensagem: "Comprador não encontrado"
+      });
+    }
+
+    // Proteção contra alteração de campos sensíveis
+    delete dados._id;
+
+    const resultado = await db.collection("compradores").updateOne(
+      { _id: id },
+      { $set: dados }
+    );
+
+    return res.status(200).json({
+      encontrado: true,
+      status: "ok",
+      modificados: resultado.modifiedCount
+    });
+
+  } catch (error) {
+    console.error("Erro ao atualizar comprador:", error);
+    return res.status(500).json({
+      erro: "Erro interno do servidor"
+    });
+  }
+});
 
 // ======================= CLIENTES =======================
 
