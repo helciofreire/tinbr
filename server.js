@@ -1746,6 +1746,7 @@ app.get("/propriedades-por-categoria-ibge", async (req, res) => {
 	razao: 1,
         categoria: 1,
         tipo: 1,
+	fase: 1,
         valor: 1,
         municipio: 1,
         ibge: 1,
@@ -1835,6 +1836,7 @@ app.get("/propriedades-por-tipo-ibge", async (req, res) => {
 	razao: 1,
         categoria: 1,
         tipo: 1,
+	fase: 1,
         valor: 1,
         municipio: 1,
         ibge: 1,
@@ -2435,6 +2437,7 @@ app.get("/propriedades-tabela-por-proprietario", async (req, res) => {
         _id: 1,
 	proprietario_id: 1,
         tipo: 1,
+	fase: 1,
         referencia: 1,
         status: 1,
         tokenqtd: 1,
@@ -2476,6 +2479,7 @@ app.get("/propriedades-tabela-por-cliente", async (req, res) => {
         _id: 1,
         proprietario_id: 1,
         tipo: 1,
+	fase: 1,
         razao: 1,
         status: 1,
         tokenqtd: 1,
@@ -2857,6 +2861,52 @@ app.put("/propriedades/:id", async (req, res) => {
     
   } catch (err) {
     res.status(500).json({ erro: "Erro ao atualizar propriedades" });
+  }
+});
+
+// PUT - Atualizar apenas valorcor da propriedade
+app.put("/propriedades/:id/valorcor", async (req, res) => {
+  try {
+
+    const id = req.params.id;
+    const { cliente_id } = req.query;
+    const { valorcor } = req.body;
+
+    // 🔒 Validações obrigatórias
+    if (!cliente_id) {
+      return res.status(400).json({ erro: "cliente_id é obrigatório na query" });
+    }
+
+    if (valorcor === undefined || isNaN(valorcor)) {
+      return res.status(400).json({ erro: "valorcor é obrigatório e deve ser numérico" });
+    }
+
+    // 🔥 Atualiza SOMENTE valorcor
+    const resultado = await db.collection("propriedades").updateOne(
+      {
+        _id: id,
+        cliente_id: cliente_id
+      },
+      {
+        $set: {
+          valorcor: Number(valorcor),
+          atualizadoEm: new Date()
+        }
+      }
+    );
+
+    if (resultado.matchedCount === 0) {
+      return res.status(404).json({ erro: "Propriedade não encontrada" });
+    }
+
+    return res.json({
+      sucesso: true,
+      mensagem: "valorcor atualizado com sucesso"
+    });
+
+  } catch (err) {
+    console.error("Erro ao atualizar valorcor:", err);
+    return res.status(500).json({ erro: "Erro ao atualizar valorcor" });
   }
 });
 
