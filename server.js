@@ -2864,49 +2864,64 @@ app.put("/propriedades/:id", async (req, res) => {
   }
 });
 
-// PUT - Atualizar apenas valorcor da propriedade
+// PUT - Atualizar valorcor e tokenrealcor
 app.put("/propriedades/:id/valorcor", async (req, res) => {
   try {
 
-    const id = req.params.id;
+    const { id } = req.params;
     const { cliente_id } = req.query;
-    const { valorcor } = req.body;
+    const { valorcor, tokenrealcor } = req.body;
 
-    // 🔒 Validações obrigatórias
     if (!cliente_id) {
-      return res.status(400).json({ erro: "cliente_id é obrigatório na query" });
+      return res.status(400).json({
+        erro: "cliente_id é obrigatório na query"
+      });
     }
 
-    if (valorcor === undefined || isNaN(valorcor)) {
-      return res.status(400).json({ erro: "valorcor é obrigatório e deve ser numérico" });
+    if (valorcor === undefined || isNaN(Number(valorcor))) {
+      return res.status(400).json({
+        erro: "valorcor é obrigatório e deve ser numérico"
+      });
     }
 
-    // 🔥 Atualiza SOMENTE valorcor
+    if (tokenrealcor === undefined || isNaN(Number(tokenrealcor))) {
+      return res.status(400).json({
+        erro: "tokenrealcor é obrigatório e deve ser numérico"
+      });
+    }
+
     const resultado = await db.collection("propriedades").updateOne(
       {
-        _id: id,
-        cliente_id: cliente_id
+        _id: String(id),
+        cliente_id: String(cliente_id)
       },
       {
         $set: {
           valorcor: Number(valorcor),
+          tokenrealcor: Number(tokenrealcor),
           atualizadoEm: new Date()
         }
       }
     );
 
     if (resultado.matchedCount === 0) {
-      return res.status(404).json({ erro: "Propriedade não encontrada" });
+      return res.status(404).json({
+        erro: "Propriedade não encontrada"
+      });
     }
 
     return res.json({
       sucesso: true,
-      mensagem: "valorcor atualizado com sucesso"
+      atualizado: resultado.modifiedCount > 0,
+      valorCorrigido: Number(valorcor),
+      token_corrigido: Number(tokenrealcor)
     });
 
   } catch (err) {
     console.error("Erro ao atualizar valorcor:", err);
-    return res.status(500).json({ erro: "Erro ao atualizar valorcor" });
+    return res.status(500).json({
+      erro: "Erro ao atualizar valorcor"
+    });
   }
 });
 
