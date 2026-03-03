@@ -2925,13 +2925,21 @@ app.put("/propriedades/:id/valorcor", async (req, res) => {
   }
 });
 
-//==========Atauliza valores de tin e dolar
+//========== Atualiza valores de TIN e Dólar
 app.put("/propriedades/:id/valorcor-auto", async (req, res) => {
   try {
 
     const id = req.params.id;
     const { cliente_id } = req.query;
-    const { valorcor, tokenrealcor } = req.body;
+
+    const {
+      valorcor,
+      tokenrealcor,
+      valortinatual,
+      tinbrcor,
+      valordolaratual,
+      datacotacaoatual
+    } = req.body;
 
     if (!cliente_id) {
       return res.status(400).json({ erro: "cliente_id é obrigatório" });
@@ -2961,6 +2969,10 @@ app.put("/propriedades/:id/valorcor-auto", async (req, res) => {
         $set: {
           valorcor: novoValor,
           tokenrealcor: novoToken,
+          valortinatual: Number(valortinatual),
+          tinbrcor: Number(tinbrcor),
+          valordolaratual: Number(valordolaratual),
+          datacotacaoatual: datacotacaoatual,
           atualizadoEm: new Date()
         }
       }
@@ -2970,7 +2982,11 @@ app.put("/propriedades/:id/valorcor-auto", async (req, res) => {
       sucesso: true,
       atualizado: resultado.modifiedCount > 0,
       valorCorrigido: novoValor,
-      token_corrigido: novoToken
+      token_corrigido: novoToken,
+      valortinatual: Number(valortinatual),
+      tinbrcor: Number(tinbrcor),
+      valordolaratual: Number(valordolaratual),
+      datacotacaoatual: datacotacaoatual
     });
 
   } catch (err) {
