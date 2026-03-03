@@ -2925,6 +2925,59 @@ app.put("/propriedades/:id/valorcor", async (req, res) => {
   }
 });
 
+//==========Atauliza valores de tin e dolar
+app.put("/propriedades/:id/valorcor-auto", async (req, res) => {
+  try {
+
+    const id = req.params.id;
+    const { cliente_id } = req.query;
+    const { valorcor, tokenrealcor } = req.body;
+
+    if (!cliente_id) {
+      return res.status(400).json({ erro: "cliente_id é obrigatório" });
+    }
+
+    const novoValor = Number(valorcor);
+    const novoToken = Number(tokenrealcor);
+
+    if (isNaN(novoValor) || isNaN(novoToken)) {
+      return res.status(400).json({
+        erro: "valorcor e tokenrealcor devem ser numéricos"
+      });
+    }
+
+    const resultado = await db.collection("propriedades").updateOne(
+      {
+        _id: id,
+        cliente_id: cliente_id,
+        $expr: {
+          $ne: [
+            { $trunc: "$valorcor" },
+            Math.trunc(novoValor)
+          ]
+        }
+      },
+      {
+        $set: {
+          valorcor: novoValor,
+          tokenrealcor: novoToken,
+          atualizadoEm: new Date()
+        }
+      }
+    );
+
+    return res.json({
+      sucesso: true,
+      atualizado: resultado.modifiedCount > 0,
+      valorCorrigido: novoValor,
+      token_corrigido: novoToken
+    });
+
+  } catch (err) {
+    console.error("Erro atualização automática:", err);
+    return res.status(500).json({ erro: "Erro interno" });
+  }
+});
 
 // ================= ATUALIZAR CAMPOS DIRETAMENTE =================
 app.put("/propriedades/:id", async (req, res) => {
