@@ -2926,6 +2926,7 @@ app.put("/propriedades/:id/valorcor", async (req, res) => {
 });
 
 //========== Atualiza valores de TIN e Dólar
+
 app.put("/propriedades/:id/valorcor-auto", async (req, res) => {
   try {
 
