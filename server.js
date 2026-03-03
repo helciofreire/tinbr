@@ -2938,7 +2938,8 @@ app.put("/propriedades/:id/valorcor-auto", async (req, res) => {
       valortinatual,
       tinbrcor,
       valordolaratual,
-      datacotacaoatual
+      datacotacaoatual,
+      valordolarcor
     } = req.body;
 
     if (!cliente_id) {
@@ -2973,6 +2974,7 @@ app.put("/propriedades/:id/valorcor-auto", async (req, res) => {
           tinbrcor: Number(tinbrcor),
           valordolaratual: Number(valordolaratual),
           datacotacaoatual: datacotacaoatual,
+	  valordolarcor: Number(valordolarcor),
           atualizadoEm: new Date()
         }
       }
@@ -2986,7 +2988,8 @@ app.put("/propriedades/:id/valorcor-auto", async (req, res) => {
       valortinatual: Number(valortinatual),
       tinbrcor: Number(tinbrcor),
       valordolaratual: Number(valordolaratual),
-      datacotacaoatual: datacotacaoatual
+      datacotacaoatual: datacotacaoatual,
+      valordolarcor: Number(valordolarcor)
     });
 
   } catch (err) {
