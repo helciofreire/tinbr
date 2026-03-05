@@ -668,6 +668,72 @@ app.delete("/proprietarios/:id", async (req, res) => {
 });
 
 //======================== COMPRADORES ====================
+// POST - Inserir comprador
+app.post("/compradores", async (req, res) => {
+
+  try {
+
+    const dados = req.body;
+
+    if (!dados) {
+      return res.status(400).json({
+        sucesso: false,
+        erro: "Dados não enviados"
+      });
+    }
+
+    if (!dados.documento || !dados.razao) {
+      return res.status(400).json({
+        sucesso: false,
+        erro: "Documento e Razão Social são obrigatórios"
+      });
+    }
+
+    if (!dados._id) {
+      return res.status(400).json({
+        sucesso: false,
+        erro: "_id é obrigatório"
+      });
+    }
+
+    // Verifica se já existe
+    const existente = await db.collection("compradores").findOne({
+      _id: dados._id
+    });
+
+    if (existente) {
+      return res.status(409).json({
+        sucesso: false,
+        erro: "Comprador já existe com este ID"
+      });
+    }
+
+    const novoComprador = {
+      ...dados,
+      criadoEm: new Date(),
+      atualizadoEm: new Date()
+    };
+
+    const resultado = await db.collection("compradores").insertOne(novoComprador);
+
+    return res.status(201).json({
+      sucesso: true,
+      inserido: resultado.insertedId
+    });
+
+  } catch (error) {
+
+    console.error("Erro ao inserir comprador:", error);
+
+    return res.status(500).json({
+      sucesso: false,
+      erro: "Erro interno do servidor"
+    });
+
+  }
+
+});
+
 // GET - Buscar comprador por documento
 app.get("/compradores/por-documento/:documento", async (req, res) => {
   try {
