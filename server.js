@@ -319,6 +319,8 @@ app.patch("/proprietarios/bloquear", async (req, res) => {
       }
     );
 
+
+///////////////////////////////////////////
     /* 3️⃣ REGISTRA HISTÓRICO */
     await db.collection("proprietarios_historico").insertOne({
       proprietario_id,
@@ -2279,7 +2281,9 @@ app.get("/propriedades-por-fase", async (req, res) => {
         tipo: 1,
         referencia: 1,
         status: 1,
-
+        comissao: 1,
+	percentual: 1,
+        vendidos: 1,
         // tokens
         tokenqtd: 1,
         tokenresto: 1,
@@ -2357,6 +2361,9 @@ app.get("/categoria-vendedor", async (req, res) => {
         tipo: 1,
         referencia: 1,
         status: 1,
+	comissao: 1,
+	percentual: 1,
+        vendidos: 1,
 
         // tokens
         tokenqtd: 1,
@@ -2506,6 +2513,9 @@ app.get("/propriedades-tabela-por-proprietario", async (req, res) => {
 	fase: 1,
         referencia: 1,
         status: 1,
+	comissao: 1,
+	percentual: 1,
+        vendidos: 1,
         tokenqtd: 1,
         tokenresto: 1,
         tokenrealcor: 1,
@@ -2548,6 +2558,9 @@ app.get("/propriedades-tabela-por-cliente", async (req, res) => {
 	fase: 1,
         razao: 1,
         status: 1,
+	comissao: 1,
+	percentual: 1,
+        vendidos: 1,
         tokenqtd: 1,
         tokenresto: 1,
         tokenrealcor: 1,
@@ -2691,9 +2704,10 @@ app.get("/verificar-tokens-vendidos", async (req, res) => {
     for (const p of propriedades) {
       const tokenqtd = Number(p.tokenqtd || 0);
       const tokenresto = Number(p.tokenresto || 0);
-
+      const vendidos = Number(p.vendidos || 0);	
       if (tokenresto < tokenqtd) {
-        tokensVendidosTotal += (tokenqtd - tokenresto);
+        //tokensVendidosTotal += (tokenqtd - tokenresto);
+	tokensVendidosTotal = vendidos;	
       }
     }
 
@@ -3067,23 +3081,79 @@ app.put("/propriedades/:id/valorcor-auto", async (req, res) => {
 
 // ================= ATUALIZAR CAMPOS DIRETAMENTE =================
 app.put("/propriedades/:id", async (req, res) => {
+
   try {
+
     const { id } = req.params;
     const { cliente_id, proprietario_id } = req.query;
 
     if (!cliente_id || !proprietario_id) {
       return res.status(400).json({
-        erro: "cliente_id e proprietario_id são obrigatórios na query."
+        erro: "cliente_id e proprietario_id são obrigatórios."
       });
     }
 
-    const camposParaAtualizar = req.body;
+    const dados = req.body;
 
-    if (!camposParaAtualizar || Object.keys(camposParaAtualizar).length === 0) {
-      return res.status(400).json({
-        erro: "Nenhum campo enviado para atualização."
+    const prop = await db.collection("propriedades").findOne({
+      _id: id,
+      cliente_id: String(cliente_id),
+      proprietario_id: String(proprietario_id)
+    });
+
+    if (!prop) {
+      return res.status(404).json({
+        erro: "Propriedade não encontrada."
       });
     }
+
+    let corrigido = false;
+
+    const tokenqtd = Number(prop.tokenqtd) || 0;
+    const vendidos = Number(prop.vendidos) || 0;
+
+    let percentual = Number(dados.percentual) || 0;
+
+    // percentual mínimo = vendido
+    const percentualMinimo =
+      tokenqtd > 0 ? (vendidos / tokenqtd) * 100 : 0;
+
+    if (percentual < percentualMinimo) {
+
+      percentual = percentualMinimo;
+      corrigido = true;
+
+    }
+
+    if (percentual > 100) {
+
+      percentual = 100;
+      corrigido = true;
+
+    }
+
+    // tokens autorizados
+    const tokensAutorizados =
+      Math.floor(tokenqtd * (percentual / 100));
+
+    // saldo real
+    const tokenresto =
+      Math.max(tokensAutorizados - vendidos, 0);
+
+    // controle automático de vendas
+    const vendas = tokenresto > 0;
+
+    const camposAtualizar = {
+
+      ...dados,
+
+      percentual: percentual,
+      tokenresto: tokenresto,
+      vendas: vendas,
+
+      atualizadoEm: new Date()
+
+    };
 
     const resultado = await db.collection("propriedades").updateOne(
       {
@@ -3092,31 +3162,36 @@ app.put("/propriedades/:id", async (req, res) => {
         proprietario_id: String(proprietario_id)
       },
       {
-        $set: {
-          ...camposParaAtualizar,
-          atualizadoEm: new Date()
-        }
+        $set: camposAtualizar
       }
     );
 
     if (resultado.matchedCount === 0) {
       return res.status(404).json({
-        erro: "Propriedade não encontrada para esse cliente/proprietário."
+        erro: "Registro não encontrado para atualização."
       });
     }
 
     return res.json({
       sucesso: true,
-      mensagem: "Propriedade atualizada com sucesso.",
-      camposAtualizados: camposParaAtualizar
+      corrigido: corrigido,
+      percentual: percentual,
+      tokenresto: tokenresto,
+      mensagem: corrigido
+        ? "Valores ajustados automaticamente para manter consistência."
+        : "Propriedade atualizada com sucesso."
     });
 
   } catch (erro) {
+
     console.error("💥 Erro PUT /propriedades/:id:", erro);
+
     return res.status(500).json({
       erro: "Erro interno ao atualizar propriedade."
     });
+
   }
+
 });
 
 // ================= ATUALIZAR STATUS DE TODAS AS PROPRIEDADES =================
