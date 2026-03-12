@@ -46,6 +46,19 @@ const ACAO_HISTORICO = {
   DESBLOQUEIO: "desbloqueio"
 };
 
+// 🔖 Constantes de ações de histórico de propriedades
+const ACAO_HISTORICO_PROPRIEDADE = {
+
+  ATUALIZACAO: "atualizacao_propriedade",
+
+  ALTERACAO_PERCENTUAL: "alteracao_percentual",
+
+  CORRECAO_AUTOMATICA: "correcao_automatica",
+
+  ALTERACAO_DADOS: "alteracao_dados"
+
+};
+
 // ======================= COTAÇÕES =======================
 
 // POST - Salvar cotação do dólar
@@ -3079,7 +3092,7 @@ app.put("/propriedades/:id/valorcor-auto", async (req, res) => {
   }
 });
 
-// ================= ATUALIZAR CAMPOS DIRETAMENTE =================
+// ================= ATUALIZAR PROPRIEDADE =================
 app.put("/propriedades/:id", async (req, res) => {
 
   try {
@@ -3097,12 +3110,14 @@ app.put("/propriedades/:id", async (req, res) => {
 
     const usuario_id = dados.usuario_id || null;
 
-    // remover campos controlados pelo backend
+    // campos que o frontend não pode controlar
     delete dados.usuario_id;
     delete dados.tokenresto;
     delete dados.vendidos;
     delete dados.vendas;
     delete dados.atualizadoEm;
+
+    // ================= BUSCAR ESTADO ATUAL =================
 
     const prop = await db.collection("propriedades").findOne({
       _id: id,
@@ -3116,14 +3131,15 @@ app.put("/propriedades/:id", async (req, res) => {
       });
     }
 
-    let corrigido = false;
-
     const tokenqtd = Number(prop.tokenqtd) || 0;
     const vendidos = Number(prop.vendidos) || 0;
 
     let percentual = Number(dados.percentual) || 0;
 
-    // percentual mínimo permitido
+    let corrigido = false;
+
+    // ================= REGRA MINIMA =================
+
     const percentualMinimo =
       tokenqtd > 0 ? (vendidos / tokenqtd) * 100 : 0;
 
@@ -3137,21 +3153,22 @@ app.put("/propriedades/:id", async (req, res) => {
       corrigido = true;
     }
 
-    // tokens autorizados
+    // ================= CALCULOS =================
+
     const tokensAutorizados =
       Math.floor(tokenqtd * (percentual / 100));
 
-    // saldo real
     const tokenresto =
       Math.max(tokensAutorizados - vendidos, 0);
 
-    // controle vendas
     const vendas = tokenresto > 0;
+
+    // ================= HISTÓRICO =================
 
     const antes = {
       percentual: prop.percentual,
       tokenresto: prop.tokenresto,
-      vendidos: vendidos
+      vendidos: prop.vendidos
     };
 
     const depois = {
@@ -3159,6 +3176,19 @@ app.put("/propriedades/:id", async (req, res) => {
       tokenresto: tokenresto,
       vendidos: vendidos
     };
+
+    // tipo de evento
+    let tipoEvento = ACAO_HISTORICO_PROPRIEDADE.ATUALIZACAO;
+
+    if (corrigido) {
+      tipoEvento = ACAO_HISTORICO_PROPRIEDADE.CORRECAO_AUTOMATICA;
+    }
+
+    if (prop.percentual !== percentual) {
+      tipoEvento = ACAO_HISTORICO_PROPRIEDADE.ALTERACAO_PERCENTUAL;
+    }
+
+    // ================= ATUALIZAÇÃO =================
 
     const camposAtualizar = {
       ...dados,
@@ -3168,7 +3198,7 @@ app.put("/propriedades/:id", async (req, res) => {
       atualizadoEm: new Date()
     };
 
-    await db.collection("propriedades").updateOne(
+    const resultado = await db.collection("propriedades").updateOne(
       {
         _id: id,
         cliente_id: String(cliente_id),
@@ -3179,7 +3209,13 @@ app.put("/propriedades/:id", async (req, res) => {
       }
     );
 
-    // ================= SALVAR HISTÓRICO =================
+    if (!resultado.matchedCount) {
+      return res.status(404).json({
+        erro: "Registro não encontrado para atualização."
+      });
+    }
+
+    // ================= GRAVAR HISTÓRICO =================
 
     await db.collection("historico_propriedades").insertOne({
 
@@ -3192,7 +3228,7 @@ app.put("/propriedades/:id", async (req, res) => {
 
       data: new Date(),
 
-      evento: "atualizacao_propriedade",
+      evento: tipoEvento,
 
       vendidos: vendidos,
 
@@ -3201,14 +3237,22 @@ app.put("/propriedades/:id", async (req, res) => {
 
     });
 
+    // ================= RESPOSTA =================
+
     return res.json({
+
       sucesso: true,
-      corrigido,
-      percentual,
-      tokenresto,
+
+      corrigido: corrigido,
+
+      percentual: percentual,
+      tokenresto: tokenresto,
+      vendidos: vendidos,
+
       mensagem: corrigido
         ? "Valores ajustados automaticamente para manter consistência."
         : "Propriedade atualizada com sucesso."
+
     });
 
   } catch (erro) {
@@ -3222,6 +3266,9 @@ app.put("/propriedades/:id", async (req, res) => {
   }
 
 });
+
+
+
 // ================= ATUALIZAR STATUS DE TODAS AS PROPRIEDADES =================
 app.put("/propriedades/status/proprietario/:idpro", async (req, res) => {
   try {
