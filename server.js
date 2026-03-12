@@ -3092,7 +3092,6 @@ app.put("/propriedades/:id/valorcor-auto", async (req, res) => {
   }
 });
 
-// ================= ATUALIZAR PROPRIEDADE =================
 app.put("/propriedades/:id", async (req, res) => {
 
   try {
@@ -3110,7 +3109,6 @@ app.put("/propriedades/:id", async (req, res) => {
 
     const usuario_id = dados.usuario_id || "sistema";
 
-    // impedir frontend de controlar campos críticos
     delete dados.usuario_id;
     delete dados.tokenresto;
     delete dados.vendidos;
@@ -3133,7 +3131,7 @@ app.put("/propriedades/:id", async (req, res) => {
 
     const tokenqtd = Number(prop.tokenqtd) || 0;
 
-    // pegar vendidos mais atual possível
+    // vendidos mais atual
     const estadoAtual = await db.collection("propriedades").findOne(
       { _id: id },
       { projection: { vendidos: 1 } }
@@ -3141,49 +3139,51 @@ app.put("/propriedades/:id", async (req, res) => {
 
     const vendidos = Number(estadoAtual.vendidos) || 0;
 
-    let percentual = Number(dados.percentual) || 0;
+    // ================= TOKENS AUTORIZADOS =================
+
+    let tokens_autorizados =
+      Math.floor(Number(dados.tokens_autorizados) || 0);
 
     let corrigido = false;
 
-    // ================= REGRA MINIMA =================
+    // regra mínima
+    if (tokens_autorizados < vendidos) {
 
-    const percentualMinimo =
-      tokenqtd > 0 ? (vendidos / tokenqtd) * 100 : 0;
-
-    if (percentual < percentualMinimo) {
-
-      percentual = percentualMinimo;
+      tokens_autorizados = vendidos;
       corrigido = true;
 
     }
 
-    if (percentual > 100) {
+    // regra máxima
+    if (tokens_autorizados > tokenqtd) {
 
-      percentual = 100;
+      tokens_autorizados = tokenqtd;
       corrigido = true;
 
     }
 
     // ================= CALCULOS =================
 
-    const tokensAutorizados =
-      Math.floor(tokenqtd * (percentual / 100));
-
     const tokenresto =
-      Math.max(tokensAutorizados - vendidos, 0);
+      Math.max(tokens_autorizados - vendidos, 0);
 
     const vendas = tokenresto > 0;
+
+    const percentual =
+      tokenqtd > 0
+        ? Number(((tokens_autorizados / tokenqtd) * 100).toFixed(2))
+        : 0;
 
     // ================= ESTADO ANTES / DEPOIS =================
 
     const antes = {
-      percentual: prop.percentual,
+      tokens_autorizados: prop.tokens_autorizados,
       tokenresto: prop.tokenresto,
       vendidos: prop.vendidos
     };
 
     const depois = {
-      percentual,
+      tokens_autorizados,
       tokenresto,
       vendidos
     };
@@ -3194,6 +3194,7 @@ app.put("/propriedades/:id", async (req, res) => {
 
       ...dados,
 
+      tokens_autorizados,
       percentual,
       tokenresto,
       vendas,
@@ -3225,7 +3226,7 @@ app.put("/propriedades/:id", async (req, res) => {
 
     const houveMudanca = (
 
-      antes.percentual !== depois.percentual ||
+      antes.tokens_autorizados !== depois.tokens_autorizados ||
       antes.tokenresto !== depois.tokenresto ||
       antes.vendidos !== depois.vendidos
 
@@ -3241,11 +3242,9 @@ app.put("/propriedades/:id", async (req, res) => {
         evento = ACAO_HISTORICO_PROPRIEDADE.CORRECAO_AUTOMATICA;
       }
 
-      if (antes.percentual !== depois.percentual) {
+      if (antes.tokens_autorizados !== depois.tokens_autorizados) {
         evento = ACAO_HISTORICO_PROPRIEDADE.ALTERACAO_PERCENTUAL;
       }
-
-      console.log("📝 criando histórico...");
 
       const historico = {
 
@@ -3267,10 +3266,7 @@ app.put("/propriedades/:id", async (req, res) => {
 
       };
 
-      const resultadoHistorico =
-        await db.collection("historico_propriedades").insertOne(historico);
-
-      console.log("📜 histórico criado:", resultadoHistorico.insertedId);
+      await db.collection("historico_propriedades").insertOne(historico);
 
     }
 
@@ -3282,6 +3278,7 @@ app.put("/propriedades/:id", async (req, res) => {
 
       corrigido,
 
+      tokens_autorizados,
       percentual,
       tokenresto,
       vendidos,
