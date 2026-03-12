@@ -3093,7 +3093,16 @@ app.put("/propriedades/:id", async (req, res) => {
       });
     }
 
-    const dados = req.body;
+    const dados = { ...req.body };
+
+    const usuario_id = dados.usuario_id || null;
+
+    // remover campos controlados pelo backend
+    delete dados.usuario_id;
+    delete dados.tokenresto;
+    delete dados.vendidos;
+    delete dados.vendas;
+    delete dados.atualizadoEm;
 
     const prop = await db.collection("propriedades").findOne({
       _id: id,
@@ -3114,22 +3123,18 @@ app.put("/propriedades/:id", async (req, res) => {
 
     let percentual = Number(dados.percentual) || 0;
 
-    // percentual mínimo = vendido
+    // percentual mínimo permitido
     const percentualMinimo =
       tokenqtd > 0 ? (vendidos / tokenqtd) * 100 : 0;
 
     if (percentual < percentualMinimo) {
-
       percentual = percentualMinimo;
       corrigido = true;
-
     }
 
     if (percentual > 100) {
-
       percentual = 100;
       corrigido = true;
-
     }
 
     // tokens autorizados
@@ -3140,22 +3145,30 @@ app.put("/propriedades/:id", async (req, res) => {
     const tokenresto =
       Math.max(tokensAutorizados - vendidos, 0);
 
-    // controle automático de vendas
+    // controle vendas
     const vendas = tokenresto > 0;
 
-    const camposAtualizar = {
-
-      ...dados,
-
-      percentual: percentual,
-      tokenresto: tokenresto,
-      vendas: vendas,
-
-      atualizadoEm: new Date()
-
+    const antes = {
+      percentual: prop.percentual,
+      tokenresto: prop.tokenresto,
+      vendidos: vendidos
     };
 
-    const resultado = await db.collection("propriedades").updateOne(
+    const depois = {
+      percentual: percentual,
+      tokenresto: tokenresto,
+      vendidos: vendidos
+    };
+
+    const camposAtualizar = {
+      ...dados,
+      percentual,
+      tokenresto,
+      vendas,
+      atualizadoEm: new Date()
+    };
+
+    await db.collection("propriedades").updateOne(
       {
         _id: id,
         cliente_id: String(cliente_id),
@@ -3166,17 +3179,33 @@ app.put("/propriedades/:id", async (req, res) => {
       }
     );
 
-    if (resultado.matchedCount === 0) {
-      return res.status(404).json({
-        erro: "Registro não encontrado para atualização."
-      });
-    }
+    // ================= SALVAR HISTÓRICO =================
+
+    await db.collection("historico_propriedades").insertOne({
+
+      propriedade_id: id,
+
+      cliente_id: cliente_id,
+      proprietario_id: proprietario_id,
+
+      usuario_id: usuario_id,
+
+      data: new Date(),
+
+      evento: "atualizacao_propriedade",
+
+      vendidos: vendidos,
+
+      antes: antes,
+      depois: depois
+
+    });
 
     return res.json({
       sucesso: true,
-      corrigido: corrigido,
-      percentual: percentual,
-      tokenresto: tokenresto,
+      corrigido,
+      percentual,
+      tokenresto,
       mensagem: corrigido
         ? "Valores ajustados automaticamente para manter consistência."
         : "Propriedade atualizada com sucesso."
@@ -3193,7 +3222,6 @@ app.put("/propriedades/:id", async (req, res) => {
   }
 
 });
-
 // ================= ATUALIZAR STATUS DE TODAS AS PROPRIEDADES =================
 app.put("/propriedades/status/proprietario/:idpro", async (req, res) => {
   try {
