@@ -3108,16 +3108,16 @@ app.put("/propriedades/:id", async (req, res) => {
 
     const dados = { ...req.body };
 
-    const usuario_id = dados.usuario_id || null;
+    const usuario_id = dados.usuario_id || "sistema";
 
-    // campos que o frontend não pode controlar
+    // impedir frontend de controlar campos críticos
     delete dados.usuario_id;
     delete dados.tokenresto;
     delete dados.vendidos;
     delete dados.vendas;
     delete dados.atualizadoEm;
 
-    // ================= BUSCAR ESTADO ATUAL =================
+    // ================= ESTADO ATUAL =================
 
     const prop = await db.collection("propriedades").findOne({
       _id: id,
@@ -3132,7 +3132,14 @@ app.put("/propriedades/:id", async (req, res) => {
     }
 
     const tokenqtd = Number(prop.tokenqtd) || 0;
-    const vendidos = Number(prop.vendidos) || 0;
+
+    // pegar vendidos mais atual possível
+    const estadoAtual = await db.collection("propriedades").findOne(
+      { _id: id },
+      { projection: { vendidos: 1 } }
+    );
+
+    const vendidos = Number(estadoAtual.vendidos) || 0;
 
     let percentual = Number(dados.percentual) || 0;
 
@@ -3144,13 +3151,17 @@ app.put("/propriedades/:id", async (req, res) => {
       tokenqtd > 0 ? (vendidos / tokenqtd) * 100 : 0;
 
     if (percentual < percentualMinimo) {
+
       percentual = percentualMinimo;
       corrigido = true;
+
     }
 
     if (percentual > 100) {
+
       percentual = 100;
       corrigido = true;
+
     }
 
     // ================= CALCULOS =================
@@ -3163,7 +3174,7 @@ app.put("/propriedades/:id", async (req, res) => {
 
     const vendas = tokenresto > 0;
 
-    // ================= HISTÓRICO =================
+    // ================= ESTADO ANTES / DEPOIS =================
 
     const antes = {
       percentual: prop.percentual,
@@ -3172,30 +3183,23 @@ app.put("/propriedades/:id", async (req, res) => {
     };
 
     const depois = {
-      percentual: percentual,
-      tokenresto: tokenresto,
-      vendidos: vendidos
+      percentual,
+      tokenresto,
+      vendidos
     };
-
-    // tipo de evento
-    let tipoEvento = ACAO_HISTORICO_PROPRIEDADE.ATUALIZACAO;
-
-    if (corrigido) {
-      tipoEvento = ACAO_HISTORICO_PROPRIEDADE.CORRECAO_AUTOMATICA;
-    }
-
-    if (prop.percentual !== percentual) {
-      tipoEvento = ACAO_HISTORICO_PROPRIEDADE.ALTERACAO_PERCENTUAL;
-    }
 
     // ================= ATUALIZAÇÃO =================
 
     const camposAtualizar = {
+
       ...dados,
+
       percentual,
       tokenresto,
       vendas,
+
       atualizadoEm: new Date()
+
     };
 
     const resultado = await db.collection("propriedades").updateOne(
@@ -3210,32 +3214,65 @@ app.put("/propriedades/:id", async (req, res) => {
     );
 
     if (!resultado.matchedCount) {
+
       return res.status(404).json({
         erro: "Registro não encontrado para atualização."
       });
+
     }
 
-    // ================= GRAVAR HISTÓRICO =================
+    // ================= DETECTAR MUDANÇAS =================
 
-    await db.collection("historico_propriedades").insertOne({
+    const houveMudanca = (
 
-      propriedade_id: id,
+      antes.percentual !== depois.percentual ||
+      antes.tokenresto !== depois.tokenresto ||
+      antes.vendidos !== depois.vendidos
 
-      cliente_id: cliente_id,
-      proprietario_id: proprietario_id,
+    );
 
-      usuario_id: usuario_id,
+    // ================= HISTÓRICO =================
 
-      data: new Date(),
+    if (houveMudanca) {
 
-      evento: tipoEvento,
+      let evento = ACAO_HISTORICO_PROPRIEDADE.ATUALIZACAO;
 
-      vendidos: vendidos,
+      if (corrigido) {
+        evento = ACAO_HISTORICO_PROPRIEDADE.CORRECAO_AUTOMATICA;
+      }
 
-      antes: antes,
-      depois: depois
+      if (antes.percentual !== depois.percentual) {
+        evento = ACAO_HISTORICO_PROPRIEDADE.ALTERACAO_PERCENTUAL;
+      }
 
-    });
+      console.log("📝 criando histórico...");
+
+      const historico = {
+
+        propriedade_id: id,
+
+        cliente_id,
+        proprietario_id,
+
+        usuario_id,
+
+        data: new Date(),
+
+        evento,
+
+        vendidos,
+
+        antes,
+        depois
+
+      };
+
+      const resultadoHistorico =
+        await db.collection("historico_propriedades").insertOne(historico);
+
+      console.log("📜 histórico criado:", resultadoHistorico.insertedId);
+
+    }
 
     // ================= RESPOSTA =================
 
@@ -3243,11 +3280,11 @@ app.put("/propriedades/:id", async (req, res) => {
 
       sucesso: true,
 
-      corrigido: corrigido,
+      corrigido,
 
-      percentual: percentual,
-      tokenresto: tokenresto,
-      vendidos: vendidos,
+      percentual,
+      tokenresto,
+      vendidos,
 
       mensagem: corrigido
         ? "Valores ajustados automaticamente para manter consistência."
