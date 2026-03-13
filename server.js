@@ -3092,6 +3092,8 @@ app.put("/propriedades/:id/valorcor-auto", async (req, res) => {
   }
 });
 
+
+////////// ATUALIZA PROPRIEDADES
 app.put("/propriedades/:id", async (req, res) => {
 
   try {
@@ -3130,35 +3132,30 @@ app.put("/propriedades/:id", async (req, res) => {
     }
 
     const tokenqtd = Number(prop.tokenqtd) || 0;
+    const vendidos = Number(prop.vendidos) || 0;
 
-    // vendidos mais atual
-    const estadoAtual = await db.collection("propriedades").findOne(
-      { _id: id },
-      { projection: { vendidos: 1 } }
-    );
+    // ================= TOKENS =================
 
-    const vendidos = Number(estadoAtual.vendidos) || 0;
-
-    // ================= TOKENS AUTORIZADOS =================
-
-    let tokens_autorizados =
-      Math.floor(Number(dados.tokens_autorizados) || 0);
-
+    let tokens_autorizados = prop.tokens_autorizados;
     let corrigido = false;
 
-    // regra mínima
-    if (tokens_autorizados < vendidos) {
+    // somente se vier no body
+    if (dados.tokens_autorizados !== undefined) {
 
-      tokens_autorizados = vendidos;
-      corrigido = true;
+      tokens_autorizados =
+        Math.floor(Number(dados.tokens_autorizados) || 0);
 
-    }
+      // regra mínima
+      if (tokens_autorizados < vendidos) {
+        tokens_autorizados = vendidos;
+        corrigido = true;
+      }
 
-    // regra máxima
-    if (tokens_autorizados > tokenqtd) {
-
-      tokens_autorizados = tokenqtd;
-      corrigido = true;
+      // regra máxima
+      if (tokens_autorizados > tokenqtd) {
+        tokens_autorizados = tokenqtd;
+        corrigido = true;
+      }
 
     }
 
@@ -3167,7 +3164,8 @@ app.put("/propriedades/:id", async (req, res) => {
     const tokenresto =
       Math.max(tokens_autorizados - vendidos, 0);
 
-    const vendas = tokenresto > 0;
+    const vendas =
+      tokenresto > 0;
 
     const percentual =
       tokenqtd > 0
@@ -3188,7 +3186,7 @@ app.put("/propriedades/:id", async (req, res) => {
       vendidos
     };
 
-    // ================= ATUALIZAÇÃO =================
+    // ================= CAMPOS ATUALIZAR =================
 
     const camposAtualizar = {
 
@@ -3266,7 +3264,8 @@ app.put("/propriedades/:id", async (req, res) => {
 
       };
 
-      await db.collection("historico_propriedades").insertOne(historico);
+      await db.collection("historico_propriedades")
+        .insertOne(historico);
 
     }
 
@@ -3300,7 +3299,6 @@ app.put("/propriedades/:id", async (req, res) => {
   }
 
 });
-
 
 
 // ================= ATUALIZAR STATUS DE TODAS AS PROPRIEDADES =================
