@@ -3093,7 +3093,36 @@ app.put("/propriedades/:id/valorcor-auto", async (req, res) => {
 });
 
 
-////////// ATUALIZA PROPRIEDADES
+// ================= FUNÇÃO DIFF =================
+function detectarMudancas(antes, depois) {
+
+  const ignorar = ["atualizadoEm"]; // campos que não geram histórico
+
+  const mudancas = {};
+
+  const normalizar = (v) =>
+    v === undefined || v === null ? null : v;
+
+  for (const chave in depois) {
+
+    if (ignorar.includes(chave)) continue;
+
+    const valorAntes = normalizar(antes[chave]);
+    const valorDepois = normalizar(depois[chave]);
+
+    if (JSON.stringify(valorAntes) !== JSON.stringify(valorDepois)) {
+      mudancas[chave] = {
+        antes: valorAntes,
+        depois: valorDepois
+      };
+    }
+  }
+
+  return mudancas;
+}
+
+
+// ================= ROTA =================
 app.put("/propriedades/:id", async (req, res) => {
 
   try {
@@ -3111,13 +3140,14 @@ app.put("/propriedades/:id", async (req, res) => {
 
     const usuario_id = dados.usuario_id || "sistema";
 
+    // limpa campos proibidos
     delete dados.usuario_id;
     delete dados.tokenresto;
     delete dados.vendidos;
     delete dados.vendas;
     delete dados.atualizadoEm;
 
-    // ================= ESTADO ATUAL =================
+    // ================= BUSCA ATUAL =================
 
     const prop = await db.collection("propriedades").findOne({
       _id: id,
@@ -3133,58 +3163,36 @@ app.put("/propriedades/:id", async (req, res) => {
 
     const tokenqtd = Number(prop.tokenqtd) || 0;
     const vendidos = Number(prop.vendidos) || 0;
+    const tokens_reservados = Number(prop.tokens_reservados) || 0;
 
     // ================= TOKENS =================
 
     let tokens_autorizados = prop.tokens_autorizados;
     let corrigido = false;
 
-    // somente se vier no body
     if (dados.tokens_autorizados !== undefined) {
 
       tokens_autorizados =
         Math.floor(Number(dados.tokens_autorizados) || 0);
 
-      // regra mínima
       if (tokens_autorizados < vendidos) {
         tokens_autorizados = vendidos;
         corrigido = true;
       }
 
-      // regra máxima
       if (tokens_autorizados > tokenqtd) {
         tokens_autorizados = tokenqtd;
         corrigido = true;
       }
-
     }
 
     // ================= CALCULOS =================
 
     const tokenresto =
-      Math.max(tokens_autorizados - vendidos, 0);
+      Math.max(tokens_autorizados - vendidos - tokens_reservados, 0);
 
     const vendas =
       tokenresto > 0;
-
-    const percentual =
-      tokenqtd > 0
-        ? Number(((tokens_autorizados / tokenqtd) * 100).toFixed(2))
-        : 0;
-
-    // ================= ESTADO ANTES / DEPOIS =================
-
-    const antes = {
-      tokens_autorizados: prop.tokens_autorizados,
-      tokenresto: prop.tokenresto,
-      vendidos: prop.vendidos
-    };
-
-    const depois = {
-      tokens_autorizados,
-      tokenresto,
-      vendidos
-    };
 
     // ================= CAMPOS ATUALIZAR =================
 
@@ -3193,13 +3201,25 @@ app.put("/propriedades/:id", async (req, res) => {
       ...dados,
 
       tokens_autorizados,
-      percentual,
       tokenresto,
       vendas,
 
       atualizadoEm: new Date()
 
     };
+
+    // ================= DETECTAR MUDANÇAS =================
+
+    const depoisCompleto = {
+      ...prop,
+      ...camposAtualizar
+    };
+
+    const mudancas = detectarMudancas(prop, depoisCompleto);
+
+    const houveMudanca = Object.keys(mudancas).length > 0;
+
+    // ================= UPDATE =================
 
     const resultado = await db.collection("propriedades").updateOne(
       {
@@ -3213,22 +3233,10 @@ app.put("/propriedades/:id", async (req, res) => {
     );
 
     if (!resultado.matchedCount) {
-
       return res.status(404).json({
         erro: "Registro não encontrado para atualização."
       });
-
     }
-
-    // ================= DETECTAR MUDANÇAS =================
-
-    const houveMudanca = (
-
-      antes.tokens_autorizados !== depois.tokens_autorizados ||
-      antes.tokenresto !== depois.tokenresto ||
-      antes.vendidos !== depois.vendidos
-
-    );
 
     // ================= HISTÓRICO =================
 
@@ -3238,10 +3246,6 @@ app.put("/propriedades/:id", async (req, res) => {
 
       if (corrigido) {
         evento = ACAO_HISTORICO_PROPRIEDADE.CORRECAO_AUTOMATICA;
-      }
-
-      if (antes.tokens_autorizados !== depois.tokens_autorizados) {
-        evento = ACAO_HISTORICO_PROPRIEDADE.ALTERACAO_PERCENTUAL;
       }
 
       const historico = {
@@ -3257,16 +3261,23 @@ app.put("/propriedades/:id", async (req, res) => {
 
         evento,
 
-        vendidos,
+        mudancas,
 
-        antes,
-        depois
+        antes: prop,
+        depois: depoisCompleto,
+
+        ip: req.ip,
+        userAgent: req.headers["user-agent"]
 
       };
 
-      await db.collection("historico_propriedades")
+      const insert = await db.collection("historico_propriedades")
         .insertOne(historico);
 
+      console.log("📜 Histórico criado:", insert.insertedId);
+
+    } else {
+      console.log("ℹ️ Nenhuma mudança detectada");
     }
 
     // ================= RESPOSTA =================
@@ -3278,7 +3289,6 @@ app.put("/propriedades/:id", async (req, res) => {
       corrigido,
 
       tokens_autorizados,
-      percentual,
       tokenresto,
       vendidos,
 
@@ -3299,7 +3309,6 @@ app.put("/propriedades/:id", async (req, res) => {
   }
 
 });
-
 
 // ================= ATUALIZAR STATUS DE TODAS AS PROPRIEDADES =================
 app.put("/propriedades/status/proprietario/:idpro", async (req, res) => {
