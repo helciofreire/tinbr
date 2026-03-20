@@ -3122,6 +3122,38 @@ function detectarMudancas(antes, depois) {
 }
 
 
+// ================= FUNÇÃO DIFF =================
+function detectarMudancas(antes, depois) {
+
+  const ignorar = ["atualizadoEm"];
+
+  const mudancas = {};
+
+  const normalizar = (v) => {
+    if (v === undefined || v === null) return null;
+    if (!isNaN(v)) return Number(v);
+    return v;
+  };
+
+  for (const chave in depois) {
+
+    if (ignorar.includes(chave)) continue;
+
+    const valorAntes = normalizar(antes[chave]);
+    const valorDepois = normalizar(depois[chave]);
+
+    if (valorAntes !== valorDepois) {
+      mudancas[chave] = {
+        antes: valorAntes,
+        depois: valorDepois
+      };
+    }
+  }
+
+  return mudancas;
+}
+
+
 // ================= ROTA =================
 app.put("/propriedades/:id", async (req, res) => {
 
@@ -3170,10 +3202,12 @@ app.put("/propriedades/:id", async (req, res) => {
     let tokens_autorizados = prop.tokens_autorizados;
     let corrigido = false;
 
-    if (dados.tokens_autorizados !== undefined) {
+    const input_tokens = dados.tokens_autorizados;
+
+    if (input_tokens !== undefined) {
 
       tokens_autorizados =
-        Math.floor(Number(dados.tokens_autorizados) || 0);
+        Math.floor(Number(input_tokens) || 0);
 
       if (tokens_autorizados < vendidos) {
         tokens_autorizados = vendidos;
@@ -3208,16 +3242,24 @@ app.put("/propriedades/:id", async (req, res) => {
 
     };
 
-    // ================= DETECTAR MUDANÇAS =================
+    // ================= ESTADO FINAL =================
 
     const depoisCompleto = {
       ...prop,
       ...camposAtualizar
     };
 
+    // ================= DETECTAR MUDANÇAS =================
+
     const mudancas = detectarMudancas(prop, depoisCompleto);
 
-    const houveMudanca = Object.keys(mudancas).length > 0;
+    // 🔥 DETECTA TENTATIVA (mesmo que valor final seja igual)
+    const tentativaAlteracao =
+      input_tokens !== undefined &&
+      Number(input_tokens) !== Number(prop.tokens_autorizados);
+
+    const houveMudanca =
+      tentativaAlteracao || Object.keys(mudancas).length > 0;
 
     // ================= UPDATE =================
 
@@ -3261,7 +3303,14 @@ app.put("/propriedades/:id", async (req, res) => {
 
         evento,
 
+        // 🔥 DIFERENÇAS REAIS
         mudancas,
+
+        // 🔥 INPUT vs RESULTADO (ESSENCIAL)
+        tentativa: {
+          tokens_autorizados_input: input_tokens,
+          tokens_autorizados_final: tokens_autorizados
+        },
 
         antes: prop,
         depois: depoisCompleto,
@@ -3309,7 +3358,6 @@ app.put("/propriedades/:id", async (req, res) => {
   }
 
 });
-
 // ================= ATUALIZAR STATUS DE TODAS AS PROPRIEDADES =================
 app.put("/propriedades/status/proprietario/:idpro", async (req, res) => {
   try {
