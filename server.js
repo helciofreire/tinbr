@@ -3121,39 +3121,6 @@ function detectarMudancas(antes, depois) {
   return mudancas;
 }
 
-
-// ================= FUNÇÃO DIFF =================
-function detectarMudancas(antes, depois) {
-
-  const ignorar = ["atualizadoEm"];
-
-  const mudancas = {};
-
-  const normalizar = (v) => {
-    if (v === undefined || v === null) return null;
-    if (!isNaN(v)) return Number(v);
-    return v;
-  };
-
-  for (const chave in depois) {
-
-    if (ignorar.includes(chave)) continue;
-
-    const valorAntes = normalizar(antes[chave]);
-    const valorDepois = normalizar(depois[chave]);
-
-    if (valorAntes !== valorDepois) {
-      mudancas[chave] = {
-        antes: valorAntes,
-        depois: valorDepois
-      };
-    }
-  }
-
-  return mudancas;
-}
-
-
 // ================= ROTA =================
 app.put("/propriedades/:id", async (req, res) => {
 
