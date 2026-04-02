@@ -13,6 +13,12 @@ app.use(cors());
 app.use(express.json());
 
 // ----------------------------------------
+// Controle do cron (evita duplicação)
+// ----------------------------------------
+
+let cronIniciado = false;
+
+// ----------------------------------------
 // Conexão MongoDB
 // ----------------------------------------
 
@@ -31,25 +37,31 @@ async function conectarBanco() {
 
     console.log("✅ MongoDB conectado:", process.env.MONGO_DB);
 
-    // 🔥 CORREÇÃO AQUI
-    iniciarCronJobs(db, client);
+    // 🔒 inicia cron apenas uma vez
+    if (!cronIniciado) {
+      iniciarCronJobs(db, client);
+      cronIniciado = true;
+    }
 
   } catch (erro) {
     console.error("❌ Erro ao conectar banco:", erro);
+    process.exit(1); // 🔥 importante em produção
   }
 }
 
-// 🔥 inicializa banco
-conectarBanco();
-
 // ----------------------------------------
-// START DO SERVIDOR (IMPORTANTE)
+// START DO SERVIDOR (ORDEM CORRETA)
 // ----------------------------------------
 
-app.listen(process.env.PORT || 3000, () => {
-  console.log("🚀 Servidor rodando");
-});
+async function startServer() {
+  await conectarBanco();
 
+  app.listen(process.env.PORT || 3000, () => {
+    console.log("🚀 Servidor rodando");
+  });
+}
+
+startServer();
 
 // ----------------------------------------
 // Funções auxiliares
