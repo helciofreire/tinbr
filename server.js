@@ -16,49 +16,47 @@ app.use(express.json());
 // Controle do cron (evita duplicação)
 // ----------------------------------------
 
-let cronIniciado = false;
+import express from "express";
+import cors from "cors";
+import { MongoClient } from "mongodb";
+import { iniciarCronJobs } from "./cron-jobs.js";
 
-// ----------------------------------------
-// Conexão MongoDB
-// ----------------------------------------
+const app = express();
+app.use(cors());
+app.use(express.json());
 
 const client = new MongoClient(process.env.MONGO_URL);
 let db;
+let cronIniciado = false;
 
 async function conectarBanco() {
-  try {
-    await client.connect();
+  await client.connect();
 
-    db = client.db(process.env.MONGO_DB);
+  db = client.db(process.env.MONGO_DB);
 
-    // 🔥 opcional (recomendado)
-    app.locals.db = db;
-    app.locals.client = client;
+  app.locals.db = db;
+  app.locals.client = client;
 
-    console.log("✅ MongoDB conectado:", process.env.MONGO_DB);
+  console.log("✅ MongoDB conectado");
 
-    // 🔒 inicia cron apenas uma vez
-    if (!cronIniciado) {
-      iniciarCronJobs(db, client);
-      cronIniciado = true;
-    }
-
-  } catch (erro) {
-    console.error("❌ Erro ao conectar banco:", erro);
-    process.exit(1); // 🔥 importante em produção
+  if (!cronIniciado) {
+    iniciarCronJobs(db, client);
+    cronIniciado = true;
   }
 }
 
-// ----------------------------------------
-// START DO SERVIDOR (ORDEM CORRETA)
-// ----------------------------------------
-
 async function startServer() {
-  await conectarBanco();
+  try {
+    await conectarBanco();
 
-  app.listen(process.env.PORT || 3000, () => {
-    console.log("🚀 Servidor rodando");
-  });
+    app.listen(process.env.PORT || 3000, () => {
+      console.log("🚀 Servidor rodando");
+    });
+
+  } catch (erro) {
+    console.error("❌ Erro fatal:", erro);
+    process.exit(1);
+  }
 }
 
 startServer();

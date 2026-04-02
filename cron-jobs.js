@@ -1,4 +1,3 @@
-// cron-jobs.js
 import cron from "node-cron";
 import fetch from "node-fetch";
 import { obterUltimaCotacaoBCB } from "./dolar-service.js";
@@ -11,41 +10,36 @@ export function iniciarCronJobs(db, client) {
   // ========================================
   cron.schedule("30 8 * * *", async () => {
     const lock = await adquirirLock(db, "cotacao");
-    if (!lock) {
-      console.log("⏭️ Lock não adquirido - cotação");
-      return;
-    }
+    if (!lock) return;
 
-    console.log("🔒 Rodando cotação...");
-
-    const cotacao = await obterUltimaCotacaoBCB();
-    if (!cotacao) return;
-
-    const registro = { 
-      data: cotacao.data,
-      valor: Number(Number(cotacao.valor).toFixed(2)),
-      criadoEm: new Date()
-    };
+    console.log("💵 Atualizando cotação...");
 
     try {
-      await db.collection("cotacoes").insertOne(registro);
-      console.log("💾 Cotação salva");
+      const cotacao = await obterUltimaCotacaoBCB();
+      if (!cotacao) return;
+
+      await db.collection("cotacoes").updateOne(
+        { data: cotacao.data },
+        {
+          $set: {
+            valor: Number(Number(cotacao.valor).toFixed(2)),
+            atualizadoEm: new Date()
+          }
+        },
+        { upsert: true }
+      );
+
     } catch (e) {
       console.error("❌ Erro cotação:", e);
     }
   });
 
   // ========================================
-  // 🔥 EXPIRAÇÃO DE RESERVAS (1 min)
+  // 🔥 EXPIRAÇÃO DE RESERVAS (2 min)
   // ========================================
-  cron.schedule("*/1 * * * *", async () => {
+  cron.schedule("*/2 * * * *", async () => {
     const lock = await adquirirLock(db, "expiracao");
-    if (!lock) {
-      console.log("⏭️ Lock não adquirido - expiração");
-      return;
-    }
-
-    console.log("⏰ Rodando expiração...");
+    if (!lock) return;
 
     try {
       const agora = new Date();
@@ -55,8 +49,12 @@ export function iniciarCronJobs(db, client) {
           status: "pending",
           expiresAt: { $lte: agora }
         })
-        .limit(50)
+        .limit(30)
         .toArray();
+
+      if (!vendas.length) return;
+
+      console.log(`⏰ Expirando ${vendas.length} vendas`);
 
       for (const venda of vendas) {
         const session = client.startSession();
@@ -83,16 +81,12 @@ export function iniciarCronJobs(db, client) {
                 tokens_reservados: { $gte: venda.quantidade }
               },
               {
-                $inc: {
-                  tokens_reservados: -venda.quantidade
-                }
+                $inc: { tokens_reservados: -venda.quantidade }
               },
               { session }
             );
 
           });
-
-          console.log("✅ Expirada:", venda.paymentId);
 
         } catch (err) {
           console.error("❌ Erro expiração:", err);
@@ -111,12 +105,7 @@ export function iniciarCronJobs(db, client) {
   // ========================================
   cron.schedule("*/5 * * * *", async () => {
     const lock = await adquirirLock(db, "reconciliacao");
-    if (!lock) {
-      console.log("⏭️ Lock não adquirido - reconciliação");
-      return;
-    }
-
-    console.log("🔄 Rodando reconciliação...");
+    if (!lock) return;
 
     try {
       const agora = new Date();
@@ -127,11 +116,14 @@ export function iniciarCronJobs(db, client) {
           paymentId: { $exists: true },
           createdAt: { $gte: new Date(agora.getTime() - 30 * 60000) }
         })
-        .limit(30)
+        .limit(20)
         .toArray();
 
-      for (const venda of vendas) {
+      if (!vendas.length) return;
 
+      console.log(`🔄 Reconciliando ${vendas.length} vendas`);
+
+      for (const venda of vendas) {
         try {
           const response = await fetch(
             `https://api.asaas.com/v3/payments/${venda.paymentId}`,
@@ -143,27 +135,25 @@ export function iniciarCronJobs(db, client) {
             }
           );
 
-          const data = await response.json();
           if (!response.ok) continue;
 
+          const data = await response.json();
           const status = data.status;
 
-          if (
-            status === "RECEIVED" ||
-            status === "CONFIRMED" ||
-            status === "CANCELLED"
-          ) {
-            console.log("🔄 Corrigindo:", venda.paymentId, status);
+          const precisaAtualizar =
+            (status === "RECEIVED" || status === "CONFIRMED") ||
+            status === "CANCELLED";
 
-            await fetch(`${process.env.BASE_URL}/vendas-tokens/status`, {
-              method: "PUT",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                paymentId: venda.paymentId,
-                status
-              })
-            });
-          }
+          if (!precisaAtualizar) continue;
+
+          await fetch(`${process.env.BASE_URL}/vendas-tokens/status`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              paymentId: venda.paymentId,
+              status
+            })
+          });
 
         } catch (err) {
           console.error("❌ Erro reconciliação:", venda.paymentId, err);
@@ -177,25 +167,27 @@ export function iniciarCronJobs(db, client) {
 }
 
 // ========================================
-// 🔒 LOCK DISTRIBUÍDO (CORRIGIDO)
+// 🔒 LOCK PROFISSIONAL (CORRETO)
 // ========================================
 async function adquirirLock(db, nome) {
   const agora = new Date();
   const expiracao = new Date(agora.getTime() + 4 * 60 * 1000);
+  const instanceId = process.pid;
 
-  const res = await db.collection("cron_locks").findOneAndUpdate(
+  const resultado = await db.collection("cron_locks").findOneAndUpdate(
     {
       nome,
       $or: [
-        { lockedUntil: { $exists: false } },
-        { lockedUntil: { $lt: agora } }
+        { lockedUntil: { $lt: agora } },
+        { lockedUntil: { $exists: false } }
       ]
     },
     {
       $set: {
         nome,
         lockedAt: agora,
-        lockedUntil: expiracao
+        lockedUntil: expiracao,
+        instanceId
       }
     },
     {
@@ -204,13 +196,9 @@ async function adquirirLock(db, nome) {
     }
   );
 
-  // 🔥 garante que só 1 instância entra
-  if (!res.value) return null;
+  if (!resultado.value || resultado.value.instanceId !== instanceId) {
+    return false;
+  }
 
-  const lockedAt = new Date(res.value.lockedAt).getTime();
-  const now = agora.getTime();
-
-  if (lockedAt !== now) return null;
-
-  return res.value;
+  return true;
 }
