@@ -1,17 +1,3 @@
-import express from "express";
-import cors from "cors";
-import bcrypt from "bcrypt";
-import { MongoClient, ObjectId } from "mongodb";
-import { iniciarCronJobs } from "./cron-jobs.js";
-
-// ----------------------------------------
-// Configuração Express
-// ----------------------------------------
-
-const app = express();
-app.use(cors());
-app.use(express.json());
-
 // ----------------------------------------
 // Controle do cron (evita duplicação)
 // ----------------------------------------
