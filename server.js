@@ -15,22 +15,41 @@ app.use(express.json());
 // ----------------------------------------
 // Conexão MongoDB
 // ----------------------------------------
+
 const client = new MongoClient(process.env.MONGO_URL);
 let db;
 
 async function conectarBanco() {
   try {
     await client.connect();
+
     db = client.db(process.env.MONGO_DB);
+
+    // 🔥 opcional (recomendado)
+    app.locals.db = db;
+    app.locals.client = client;
+
     console.log("✅ MongoDB conectado:", process.env.MONGO_DB);
 
-    iniciarCronJobs(db);
+    // 🔥 CORREÇÃO AQUI
+    iniciarCronJobs(db, client);
 
   } catch (erro) {
     console.error("❌ Erro ao conectar banco:", erro);
   }
 }
+
+// 🔥 inicializa banco
 conectarBanco();
+
+// ----------------------------------------
+// START DO SERVIDOR (IMPORTANTE)
+// ----------------------------------------
+
+app.listen(process.env.PORT || 3000, () => {
+  console.log("🚀 Servidor rodando");
+});
+
 
 // ----------------------------------------
 // Funções auxiliares
@@ -3695,6 +3714,224 @@ app.delete("/operacoes/:id", async (req, res) => {
     
   } catch (err) {
     res.status(500).json({ erro: "Erro ao remover operacao" });
+  }
+});
+
+
+//===================CRIAR VENDAS=======================
+
+app.post("/vendas-tokens", async (req, res) => {
+  const session = req.app.locals.client.startSession();
+
+  try {
+    const {
+      externalReference,
+      paymentId,
+      cliente_id,
+      propriedade_id,
+      quantidade,
+      valor
+    } = req.body;
+
+    if (!externalReference || !paymentId || !propriedade_id || !quantidade) {
+      return res.status(400).json({
+        erro: "Dados obrigatórios faltando"
+      });
+    }
+
+    const db = req.app.locals.db;
+
+    const agora = new Date();
+
+    // 🔥 tempo de expiração (igual ao checkout)
+    const expiraEmMinutos = 10;
+    const expiresAt = new Date(agora.getTime() + expiraEmMinutos * 60000);
+
+    await session.withTransaction(async () => {
+
+      // 🔒 1. RESERVA ATÔMICA (ANTI-OVERSELLING)
+      const reserva = await db.collection("propriedades").updateOne(
+        {
+          _id: propriedade_id,
+          $expr: {
+            $gte: [
+              {
+                $subtract: [
+                  "$tokens_total",
+                  { $add: ["$vendidos", "$tokens_reservados"] }
+                ]
+              },
+              quantidade
+            ]
+          }
+        },
+        {
+          $inc: { tokens_reservados: quantidade }
+        },
+        { session }
+      );
+
+      if (reserva.modifiedCount === 0) {
+        throw new Error("Tokens indisponíveis (overselling evitado)");
+      }
+
+      // 🔒 2. CRIA VENDA (COM EXPIRAÇÃO)
+      await db.collection("vendas_tokens").insertOne({
+        externalReference,
+        paymentId,
+        cliente_id,
+        propriedade_id,
+        quantidade,
+        valor,
+        status: "pending",
+        expiresAt, // 🔥 NOVO CAMPO
+        createdAt: agora
+      }, { session });
+
+    });
+
+    return res.json({
+      ok: true,
+      expiresAt // opcional: útil pro frontend mostrar countdown
+    });
+
+  } catch (err) {
+    console.error("❌ Erro ao criar venda:", err);
+
+    return res.status(500).json({
+      erro: err.message
+    });
+
+  } finally {
+    await session.endSession();
+  }
+});
+
+
+//===================== ATUALIZA STATUS VENDAS=========
+
+app.put("/vendas-tokens/status", async (req, res) => {
+  const client = req.app.locals.client;
+  const db = req.app.locals.db;
+
+  const session = client.startSession();
+
+  try {
+    const { paymentId, status } = req.body;
+
+    if (!paymentId || !status) {
+      return res.status(400).json({
+        erro: "paymentId e status obrigatórios"
+      });
+    }
+
+    await session.withTransaction(async () => {
+
+      // 🔒 pega a venda dentro da transação
+      const venda = await db.collection("vendas_tokens").findOne(
+        { paymentId },
+        { session }
+      );
+
+      if (!venda) {
+        throw new Error("Venda não encontrada");
+      }
+
+      // 🔒 idempotência forte
+      if (["RECEIVED", "CONFIRMED", "CANCELLED", "EXPIRED"].includes(venda.status)) {
+        console.log("⚠️ Evento já processado:", venda.status);
+        return;
+      }
+
+      const { propriedade_id, quantidade } = venda;
+
+      // 🔥 atualiza venda
+      const updateVenda = await db.collection("vendas_tokens").updateOne(
+        {
+          paymentId,
+          status: "pending" // 🔥 trava real
+        },
+        {
+          $set: {
+            status,
+            updatedAt: new Date()
+          }
+        },
+        { session }
+      );
+
+      if (updateVenda.modifiedCount === 0) {
+        console.log("⚠️ Evento duplicado ignorado");
+        return;
+      }
+
+      // 🔥 ATUALIZA PROPRIEDADE (DENTRO DA TRANSAÇÃO)
+
+      if (status === "RECEIVED" || status === "CONFIRMED") {
+        await db.collection("propriedades").updateOne(
+          {
+            _id: propriedade_id,
+            tokens_reservados: { $gte: quantidade } // proteção
+          },
+          {
+            $inc: {
+              vendidos: quantidade,
+              tokens_reservados: -quantidade
+            }
+          },
+          { session }
+        );
+      }
+
+      if (status === "CANCELLED" || status === "EXPIRED") {
+        await db.collection("propriedades").updateOne(
+          {
+            _id: propriedade_id,
+            tokens_reservados: { $gte: quantidade }
+          },
+          {
+            $inc: {
+              tokens_reservados: -quantidade
+            }
+          },
+          { session }
+        );
+      }
+
+    });
+
+    return res.json({ ok: true });
+
+  } catch (err) {
+    console.error("❌ Erro ao atualizar status:", err);
+    return res.status(500).json({ erro: err.message });
+
+  } finally {
+    await session.endSession();
+  }
+});
+//=====================WEBHOOK VENDAS==============
+
+app.post("/vendas-tokens/webhook", async (req, res) => {
+  try {
+    const evento = req.body;
+
+    const paymentId = evento.payment?.id;
+    const status = evento.event;
+
+    if (!paymentId) return res.sendStatus(200);
+
+    await fetch("https://tinbr.onrender.com/vendas-tokens/status", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ paymentId, status })
+    });
+
+    return res.sendStatus(200);
+
+  } catch (err) {
+    console.error("❌ Erro webhook:", err);
+    return res.sendStatus(500);
   }
 });
 
