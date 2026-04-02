@@ -6,6 +6,7 @@ import express from "express";
 import cors from "cors";
 import { MongoClient } from "mongodb";
 import { iniciarCronJobs } from "./cron-jobs.js";
+import { atualizarStatusVenda } from "./services/vendas-service.js"
 
 const app = express();
 app.use(cors());
@@ -3807,11 +3808,6 @@ app.post("/vendas-tokens", async (req, res) => {
 //===================== ATUALIZA STATUS VENDAS=========
 
 app.put("/vendas-tokens/status", async (req, res) => {
-  const client = req.app.locals.client;
-  const db = req.app.locals.db;
-
-  const session = client.startSession();
-
   try {
     const { paymentId, status } = req.body;
 
@@ -3821,91 +3817,21 @@ app.put("/vendas-tokens/status", async (req, res) => {
       });
     }
 
-    await session.withTransaction(async () => {
-
-      // 🔒 pega a venda dentro da transação
-      const venda = await db.collection("vendas_tokens").findOne(
-        { paymentId },
-        { session }
-      );
-
-      if (!venda) {
-        throw new Error("Venda não encontrada");
-      }
-
-      // 🔒 idempotência forte
-      if (["RECEIVED", "CONFIRMED", "CANCELLED", "EXPIRED"].includes(venda.status)) {
-        console.log("⚠️ Evento já processado:", venda.status);
-        return;
-      }
-
-      const { propriedade_id, quantidade } = venda;
-
-      // 🔥 atualiza venda
-      const updateVenda = await db.collection("vendas_tokens").updateOne(
-        {
-          paymentId,
-          status: "pending" // 🔥 trava real
-        },
-        {
-          $set: {
-            status,
-            updatedAt: new Date()
-          }
-        },
-        { session }
-      );
-
-      if (updateVenda.modifiedCount === 0) {
-        console.log("⚠️ Evento duplicado ignorado");
-        return;
-      }
-
-      // 🔥 ATUALIZA PROPRIEDADE (DENTRO DA TRANSAÇÃO)
-
-      if (status === "RECEIVED" || status === "CONFIRMED") {
-        await db.collection("propriedades").updateOne(
-          {
-            _id: propriedade_id,
-            tokens_reservados: { $gte: quantidade } // proteção
-          },
-          {
-            $inc: {
-              vendidos: quantidade,
-              tokens_reservados: -quantidade
-            }
-          },
-          { session }
-        );
-      }
-
-      if (status === "CANCELLED" || status === "EXPIRED") {
-        await db.collection("propriedades").updateOne(
-          {
-            _id: propriedade_id,
-            tokens_reservados: { $gte: quantidade }
-          },
-          {
-            $inc: {
-              tokens_reservados: -quantidade
-            }
-          },
-          { session }
-        );
-      }
-
-    });
+    await atualizarStatusVenda(
+      req.app.locals.db,
+      req.app.locals.client,
+      paymentId,
+      status
+    );
 
     return res.json({ ok: true });
 
   } catch (err) {
-    console.error("❌ Erro ao atualizar status:", err);
+    console.error("❌ Erro status:", err);
     return res.status(500).json({ erro: err.message });
-
-  } finally {
-    await session.endSession();
   }
 });
+
 //=====================WEBHOOK VENDAS==============
 
 app.post("/vendas-tokens/webhook", async (req, res) => {
@@ -3913,11 +3839,11 @@ app.post("/vendas-tokens/webhook", async (req, res) => {
     const evento = req.body;
 
     const paymentId = evento.payment?.id;
-    const status = evento.event;
+    const status = evento.payment?.status;
 
-    if (!paymentId) return res.sendStatus(200);
+    if (!paymentId || !status) return res.sendStatus(200);
 
-    await fetch("https://tinbr.onrender.com/vendas-tokens/status", {
+    await fetch(`${process.env.BASE_URL}/vendas-tokens/status`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ paymentId, status })

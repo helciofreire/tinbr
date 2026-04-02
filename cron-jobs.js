@@ -1,6 +1,7 @@
 import cron from "node-cron";
 import fetch from "node-fetch";
 import { obterUltimaCotacaoBCB } from "./dolar-service.js";
+import { atualizarStatusVenda } from "./services/vendas-service.js";
 
 export function iniciarCronJobs(db, client) {
   console.log("⏳ Iniciando cron jobs...");
@@ -38,133 +39,122 @@ export function iniciarCronJobs(db, client) {
   // 🔥 EXPIRAÇÃO DE RESERVAS (2 min)
   // ========================================
   cron.schedule("*/2 * * * *", async () => {
-    const lock = await adquirirLock(db, "expiracao");
-    if (!lock) return;
+  const lock = await adquirirLock(db, "expiracao");
+  if (!lock) return;
 
-    try {
-      const agora = new Date();
+  try {
+    const agora = new Date();
 
-      const vendas = await db.collection("vendas_tokens")
-        .find({
-          status: "pending",
-          expiresAt: { $lte: agora }
-        })
-        .limit(30)
-        .toArray();
+    const vendas = await db.collection("vendas_tokens")
+      .find({
+        status: "pending",
+        expiresAt: { $lte: agora }
+      })
+      .limit(30)
+      .toArray();
 
-      if (!vendas.length) return;
+    if (!vendas.length) return;
 
-      console.log(`⏰ Expirando ${vendas.length} vendas`);
+    console.log(`⏰ Expirando ${vendas.length} vendas`);
 
-      for (const venda of vendas) {
-        const session = client.startSession();
+    for (const venda of vendas) {
+      try {
+        await atualizarStatusVenda(
+          db,
+          client,
+          venda.paymentId,
+          "EXPIRED"
+        );
 
-        try {
-          await session.withTransaction(async () => {
-
-            const update = await db.collection("vendas_tokens").updateOne(
-              { _id: venda._id, status: "pending" },
-              {
-                $set: {
-                  status: "EXPIRED",
-                  updatedAt: new Date()
-                }
-              },
-              { session }
-            );
-
-            if (update.modifiedCount === 0) return;
-
-            await db.collection("propriedades").updateOne(
-              {
-                _id: venda.propriedade_id,
-                tokens_reservados: { $gte: venda.quantidade }
-              },
-              {
-                $inc: { tokens_reservados: -venda.quantidade }
-              },
-              { session }
-            );
-
-          });
-
-        } catch (err) {
-          console.error("❌ Erro expiração:", err);
-        } finally {
-          await session.endSession();
-        }
+      } catch (err) {
+        console.error("❌ Erro expiração:", venda.paymentId, err);
       }
-
-    } catch (err) {
-      console.error("❌ Erro geral expiração:", err);
     }
+
+  } catch (err) {
+    console.error("❌ Erro geral expiração:", err);
+  }
+});
+
   });
 
   // ========================================
   // 🔄 RECONCILIAÇÃO ASAAS (5 min)
   // ========================================
   cron.schedule("*/5 * * * *", async () => {
-    const lock = await adquirirLock(db, "reconciliacao");
-    if (!lock) return;
+  const lock = await adquirirLock(db, "reconciliacao");
+  if (!lock) return;
 
-    try {
-      const agora = new Date();
+  try {
+    const agora = new Date();
 
-      const vendas = await db.collection("vendas_tokens")
-        .find({
-          status: "pending",
-          paymentId: { $exists: true },
-          createdAt: { $gte: new Date(agora.getTime() - 30 * 60000) }
-        })
-        .limit(20)
-        .toArray();
+    const vendas = await db.collection("vendas_tokens")
+      .find({
+        status: "pending",
+        paymentId: { $exists: true },
+        createdAt: { $gte: new Date(agora.getTime() - 30 * 60000) }
+      })
+      .limit(20)
+      .toArray();
 
-      if (!vendas.length) return;
+    if (!vendas.length) return;
 
-      console.log(`🔄 Reconciliando ${vendas.length} vendas`);
+    console.log(`🔄 Reconciliando ${vendas.length} vendas`);
 
-      for (const venda of vendas) {
-        try {
-          const response = await fetch(
-            `https://api.asaas.com/v3/payments/${venda.paymentId}`,
-            {
-              headers: {
-                "Content-Type": "application/json",
-                "access_token": process.env.ASAAS_API_KEY
-              }
+    for (const venda of vendas) {
+      try {
+        const response = await fetch(
+          `https://api.asaas.com/v3/payments/${venda.paymentId}`,
+          {
+            headers: {
+              "Content-Type": "application/json",
+              "access_token": process.env.ASAAS_API_KEY
             }
+          }
+        );
+
+        if (!response.ok) continue;
+
+        const data = await response.json();
+        const status = data.status;
+
+        // 🔥 EVITA PROCESSAMENTO DESNECESSÁRIO
+        if (
+          (status === "RECEIVED" || status === "CONFIRMED") &&
+          venda.status !== "RECEIVED" &&
+          venda.status !== "CONFIRMED"
+        ) {
+          await atualizarStatusVenda(
+            db,
+            client,
+            venda.paymentId,
+            status
           );
-
-          if (!response.ok) continue;
-
-          const data = await response.json();
-          const status = data.status;
-
-          const precisaAtualizar =
-            (status === "RECEIVED" || status === "CONFIRMED") ||
-            status === "CANCELLED";
-
-          if (!precisaAtualizar) continue;
-
-          await fetch(`${process.env.BASE_URL}/vendas-tokens/status`, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              paymentId: venda.paymentId,
-              status
-            })
-          });
-
-        } catch (err) {
-          console.error("❌ Erro reconciliação:", venda.paymentId, err);
+          continue;
         }
-      }
 
-    } catch (err) {
-      console.error("❌ Erro geral reconciliação:", err);
+        if (
+          (status === "CANCELLED" || status === "EXPIRED") &&
+          venda.status !== status
+        ) {
+          await atualizarStatusVenda(
+            db,
+            client,
+            venda.paymentId,
+            status
+          );
+          continue;
+        }
+
+      } catch (err) {
+        console.error("❌ Erro reconciliação:", venda.paymentId, err);
+      }
     }
-  });
-}
+
+  } catch (err) {
+    console.error("❌ Erro geral reconciliação:", err);
+  }
+});
 
 // ========================================
 // 🔒 LOCK PROFISSIONAL (CORRETO)
