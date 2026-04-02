@@ -190,3 +190,4 @@ async function adquirirLock(db, nome) {
 
   return true;
 }
+}
