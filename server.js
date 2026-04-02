@@ -3843,11 +3843,12 @@ app.post("/vendas-tokens/webhook", async (req, res) => {
 
     if (!paymentId || !status) return res.sendStatus(200);
 
-    await fetch(`${process.env.BASE_URL}/vendas-tokens/status`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ paymentId, status })
-    });
+    await atualizarStatusVenda(
+  	req.app.locals.db,
+  	req.app.locals.client,
+  	paymentId,
+  	status
+);
 
     return res.sendStatus(200);
 

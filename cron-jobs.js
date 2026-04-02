@@ -76,8 +76,6 @@ export function iniciarCronJobs(db, client) {
   }
 });
 
-  });
-
   // ========================================
   // 🔄 RECONCILIAÇÃO ASAAS (5 min)
   // ========================================
