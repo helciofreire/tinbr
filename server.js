@@ -3896,6 +3896,64 @@ app.post("/vendas-tokens/webhook", async (req, res) => {
   }
 });
 
+// ================= CRIAR PAGAMENTO PIX =================
+
+app.post("/criar-pagamento-pix", async (req, res) => {
+  try {
+    const {
+      externalReference,
+      cliente_id,
+      propriedade_id,
+      valor,
+      quantidade
+    } = req.body;
+
+    const response = await axios.post(
+      "https://api.asaas.com/v3/payments",
+      {
+        billingType: "PIX",
+        value: valor,
+        dueDate: new Date(),
+        externalReference,
+        description: `Compra de ${quantidade} tokens`,
+        customer: cliente_id
+      },
+      {
+        headers: {
+          "Content-Type": "application/json",
+          access_token: process.env.ASAAS_API_KEY
+        }
+      }
+    );
+
+    const paymentId = response.data.id;
+
+    // 🔥 BUSCAR QR CODE
+    const pix = await axios.get(
+      `https://api.asaas.com/v3/payments/${paymentId}/pixQrCode`,
+      {
+        headers: {
+          access_token: process.env.ASAAS_API_KEY
+        }
+      }
+    );
+
+    return res.json({
+      ok: true,
+      paymentId,
+      qrCode: pix.data.encodedImage,
+      payload: pix.data.payload
+    });
+
+  } catch (err) {
+    console.error("❌ Erro PIX:", err.response?.data || err.message);
+
+    return res.status(500).json({
+      erro: "Erro ao gerar PIX"
+    });
+  }
+});
+
 // ========================================
 // CRUD PARA MERCADO (PÚBLICO - MOSTRA cliente_id)
 // ========================================
