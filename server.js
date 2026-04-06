@@ -3715,8 +3715,7 @@ app.delete("/operacoes/:id", async (req, res) => {
   }
 });
 
-
-//===================CRIAR VENDAS=======================
+//==============CRIAR VENDAS==========
 
 app.post("/vendas-tokens", async (req, res) => {
   const session = req.app.locals.client.startSession();
@@ -3724,14 +3723,15 @@ app.post("/vendas-tokens", async (req, res) => {
   try {
     const {
       externalReference,
-      paymentId,
       cliente_id,
-      propriedade_id,
-      quantidade,
-      valor
+      propriedade_id
     } = req.body;
 
-    if (!externalReference || !paymentId || !propriedade_id || !quantidade) {
+    // 🔥 extrai corretamente
+    const quantidade = req.body.quantidade || req.body.items?.[0]?.quantity;
+    const valor = req.body.valor || req.body.items?.[0]?.value;
+
+    if (!externalReference || !propriedade_id || !quantidade) {
       return res.status(400).json({
         erro: "Dados obrigatórios faltando"
       });
@@ -3740,14 +3740,11 @@ app.post("/vendas-tokens", async (req, res) => {
     const db = req.app.locals.db;
 
     const agora = new Date();
-
-    // 🔥 tempo de expiração (igual ao checkout)
     const expiraEmMinutos = 10;
     const expiresAt = new Date(agora.getTime() + expiraEmMinutos * 60000);
 
     await session.withTransaction(async () => {
 
-      // 🔒 1. RESERVA ATÔMICA (ANTI-OVERSELLING)
       const reserva = await db.collection("propriedades").updateOne(
         {
           _id: propriedade_id,
@@ -3773,16 +3770,15 @@ app.post("/vendas-tokens", async (req, res) => {
         throw new Error("Tokens indisponíveis (overselling evitado)");
       }
 
-      // 🔒 2. CRIA VENDA (COM EXPIRAÇÃO)
       await db.collection("vendas_tokens").insertOne({
         externalReference,
-        paymentId,
+        paymentId: null, // 🔥 agora não existe ainda
         cliente_id,
         propriedade_id,
         quantidade,
         valor,
         status: "pending",
-        expiresAt, // 🔥 NOVO CAMPO
+        expiresAt,
         createdAt: agora
       }, { session });
 
@@ -3790,7 +3786,7 @@ app.post("/vendas-tokens", async (req, res) => {
 
     return res.json({
       ok: true,
-      expiresAt // opcional: útil pro frontend mostrar countdown
+      expiresAt
     });
 
   } catch (err) {
@@ -3804,7 +3800,6 @@ app.post("/vendas-tokens", async (req, res) => {
     await session.endSession();
   }
 });
-
 
 //===================== ATUALIZA STATUS VENDAS=========
 
