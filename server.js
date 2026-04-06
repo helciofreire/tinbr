@@ -7,6 +7,7 @@ import cors from "cors";
 import { MongoClient } from "mongodb";
 import { iniciarCronJobs } from "./cron-jobs.js";
 import { atualizarStatusVenda } from "./services/vendas-service.js"
+import bcrypt from "bcryptjs";
 
 const app = express();
 app.use(cors());
