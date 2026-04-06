@@ -3739,10 +3739,52 @@ app.post("/vendas-tokens", async (req, res) => {
 
     const db = req.app.locals.db;
 
+    // 🔎 1. BUSCA PROPRIEDADE (ANTES DA TRANSAÇÃO)
+    const prop = await db.collection("propriedades").findOne({ _id: propriedade_id });
+
+    if (!prop) {
+      return res.status(404).json({
+        erro: "Propriedade não encontrada"
+      });
+    }
+
+    // 🔥 2. VALIDAÇÃO DE INTEGRIDADE
+    if (prop.tokens_autorizados > prop.tokenqtd) {
+      return res.status(400).json({
+        erro: "tokens_autorizados maior que total emitido"
+      });
+    }
+
+    if (prop.tokens_autorizados < 0) {
+      return res.status(400).json({
+        erro: "tokens_autorizados inválido"
+      });
+    }
+
+    if (prop.vendidos < 0 || prop.tokens_reservados < 0) {
+      return res.status(400).json({
+        erro: "valores negativos inválidos"
+      });
+    }
+
+    // 📊 DEBUG (AJUDA MUITO)
+    const disponivel = prop.tokens_autorizados - prop.vendidos - prop.tokens_reservados;
+
+    console.log("📊 Estoque:", {
+      propriedade_id,
+      totalEmitido: prop.tokenqtd,
+      autorizados: prop.tokens_autorizados,
+      vendidos: prop.vendidos,
+      reservados: prop.tokens_reservados,
+      disponivel,
+      tentandoComprar: quantidade
+    });
+
     const agora = new Date();
     const expiraEmMinutos = 10;
     const expiresAt = new Date(agora.getTime() + expiraEmMinutos * 60000);
 
+    // 🔒 3. TRANSAÇÃO
     await session.withTransaction(async () => {
 
       const reserva = await db.collection("propriedades").updateOne(
@@ -3752,7 +3794,7 @@ app.post("/vendas-tokens", async (req, res) => {
             $gte: [
               {
                 $subtract: [
-                  "$tokens_total",
+                  "$tokens_autorizados",
                   { $add: ["$vendidos", "$tokens_reservados"] }
                 ]
               },
@@ -3772,7 +3814,7 @@ app.post("/vendas-tokens", async (req, res) => {
 
       await db.collection("vendas_tokens").insertOne({
         externalReference,
-        paymentId: null, // 🔥 agora não existe ainda
+        paymentId: null, // será atualizado no webhook
         cliente_id,
         propriedade_id,
         quantidade,
