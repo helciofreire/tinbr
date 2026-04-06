@@ -4103,13 +4103,15 @@ app.post("/users/login", async (req, res) => {
     });
 
   } catch (erro) {
-    console.error("❌ Erro no login:", erro);
-    res.status(500).json({ 
-      ok: false, 
-      mensagem: "Erro interno no servidor." 
-    });
-  }
+  console.error("❌ ERRO REAL:", erro);
+  
+  res.status(500).json({ 
+    ok: false, 
+    mensagem: erro.message // 👈 MOSTRA O ERRO REAL
+  });
+}
 });
+
 //==========================================================
 app.get("/health", (req, res) => res.json({ status: "ok" }));
 
