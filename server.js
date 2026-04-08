@@ -3813,7 +3813,7 @@ app.post("/vendas-tokens", async (req, res) => {
       }
 
       await db.collection("vendas_tokens").insertOne({
-	_id: String(externalReference),
+	_id: externalReference,
         externalReference,
         paymentId: null, // será atualizado no webhook
         cliente_id,
