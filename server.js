@@ -3813,6 +3813,7 @@ app.post("/vendas-tokens", async (req, res) => {
       }
 
       await db.collection("vendas_tokens").insertOne({
+	_id: String(externalReference),
         externalReference,
         paymentId: null, // será atualizado no webhook
         cliente_id,
@@ -3897,6 +3898,7 @@ app.post("/vendas-tokens/webhook", async (req, res) => {
 });
 
 // ================= CRIAR PAGAMENTO PIX =================
+git add server.js
 
 app.post("/criar-pagamento-pix", async (req, res) => {
   try {
