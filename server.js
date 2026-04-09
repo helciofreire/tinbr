@@ -3715,6 +3715,80 @@ app.delete("/operacoes/:id", async (req, res) => {
   }
 });
 
+//===================== EXPIRAR VENDA =====================
+app.post("/vendas-tokens/expirar", async (req, res) => {
+  try {
+    const { externalReference } = req.body;
+
+    if (!externalReference) {
+      return res.status(400).json({
+        erro: "externalReference obrigatório"
+      });
+    }
+
+    const db = req.app.locals.db;
+
+    console.log("⏳ Expirando venda:", externalReference);
+
+    const venda = await db.collection("vendas_tokens").findOne({
+      _id: String(externalReference)
+    });
+
+    if (!venda) {
+      return res.status(404).json({
+        erro: "Venda não encontrada"
+      });
+    }
+
+    // 🔒 já resolvida → não mexe
+    if (venda.status === "paid") {
+      console.log("✅ Venda já paga, ignorando");
+      return res.json({ ok: true, ignored: true });
+    }
+
+    const agora = new Date();
+
+    if (new Date(venda.expiresAt) > agora) {
+      console.log("⏱️ Ainda não expirou");
+      return res.json({ ok: true, notExpired: true });
+    }
+
+    // 🔥 libera tokens
+    await db.collection("propriedades").updateOne(
+      { _id: venda.propriedade_id },
+      {
+        $inc: {
+          tokens_reservados: -venda.quantidade
+        }
+      }
+    );
+
+    await db.collection("vendas_tokens").updateOne(
+      { _id: venda._id },
+      {
+        $set: {
+          status: "expired",
+          expiredAt: agora
+        }
+      }
+    );
+
+    console.log("♻️ Tokens devolvidos com sucesso");
+
+    return res.json({
+      ok: true,
+      expired: true
+    });
+
+  } catch (err) {
+    console.error("❌ Erro ao expirar venda:", err);
+
+    return res.status(500).json({
+      erro: err.message
+    });
+  }
+});
+
 //==============CRIAR VENDAS==========
 
 app.post("/vendas-tokens", async (req, res) => {
@@ -3870,8 +3944,6 @@ app.put("/vendas-tokens/status", async (req, res) => {
     return res.status(500).json({ erro: err.message });
   }
 });
-
-//=====================WEBHOOK VENDAS==============
 
 //===================== WEBHOOK VENDAS ==============
 
