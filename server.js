@@ -3873,21 +3873,129 @@ app.put("/vendas-tokens/status", async (req, res) => {
 
 //=====================WEBHOOK VENDAS==============
 
+//===================== WEBHOOK VENDAS ==============
+
 app.post("/vendas-tokens/webhook", async (req, res) => {
   try {
+    console.log("🔥 WEBHOOK RENDER RECEBIDO");
+
     const evento = req.body;
 
-    const paymentId = evento.payment?.id;
-    const status = evento.payment?.status;
+    console.log("📩 Evento:", JSON.stringify(evento, null, 2));
 
-    if (!paymentId || !status) return res.sendStatus(200);
+    const payment = evento.payment;
+    const event = evento.event;
 
-    await atualizarStatusVenda(
-  	req.app.locals.db,
-  	req.app.locals.client,
-  	paymentId,
-  	status
-);
+    if (!payment || !event) {
+      console.log("❌ Payload inválido");
+      return res.sendStatus(200);
+    }
+
+    const paymentId = payment.id;
+    const status = payment.status;
+    const venda_id = payment.externalReference;
+
+    console.log("📊 EVENT:", event);
+    console.log("💳 paymentId:", paymentId);
+    console.log("🧾 venda_id:", venda_id);
+    console.log("📌 status:", status);
+
+    if (!venda_id) {
+      console.log("❌ externalReference não veio");
+      return res.sendStatus(200);
+    }
+
+    const db = req.app.locals.db;
+
+    if (!db) {
+      console.error("❌ DB não conectado");
+      return res.sendStatus(500);
+    }
+
+    const vendas = db.collection("vendas_tokens");
+    const propriedades = db.collection("propriedades");
+
+    // =========================
+    // 1️⃣ BUSCAR VENDA
+    // =========================
+    const venda = await vendas.findOne({ _id: venda_id });
+
+    if (!venda) {
+      console.log("❌ Venda não encontrada:", venda_id);
+      return res.sendStatus(200);
+    }
+
+    console.log("📦 Venda encontrada:", venda._id);
+
+    // 🔒 PROTEÇÃO DUPLICIDADE
+    if (venda.status === "paid" || venda.status === "canceled") {
+      console.log("⚠️ Evento duplicado ignorado");
+      return res.sendStatus(200);
+    }
+
+    // =========================
+    // 2️⃣ PAGAMENTO CONFIRMADO
+    // =========================
+    if (event === "PAYMENT_RECEIVED" || event === "PAYMENT_CONFIRMED") {
+
+      console.log("✅ PAGAMENTO CONFIRMADO");
+
+      await vendas.updateOne(
+        { _id: venda_id },
+        {
+          $set: {
+            status: "paid",
+            paymentId,
+            paidAt: new Date()
+          }
+        }
+      );
+
+      await propriedades.updateOne(
+        { _id: venda.propriedade_id },
+        {
+          $inc: {
+            tokens_reservados: -venda.quantidade,
+            vendidos: venda.quantidade
+          }
+        }
+      );
+
+      console.log("🎉 Tokens liberados com sucesso");
+    }
+
+    // =========================
+    // 3️⃣ CANCELADO / EXPIRADO
+    // =========================
+    if (
+      event === "PAYMENT_OVERDUE" ||
+      event === "PAYMENT_DELETED"
+    ) {
+
+      console.log("⚠️ PAGAMENTO CANCELADO/EXPIRADO");
+
+      await vendas.updateOne(
+        { _id: venda_id },
+        {
+          $set: {
+            status: "canceled",
+            paymentId,
+            canceledAt: new Date()
+          }
+        }
+      );
+
+      await propriedades.updateOne(
+        { _id: venda.propriedade_id },
+        {
+          $inc: {
+            tokens_reservados: -venda.quantidade
+          }
+        }
+      );
+
+      console.log("🔄 Tokens devolvidos ao estoque");
+    }
 
     return res.sendStatus(200);
 
