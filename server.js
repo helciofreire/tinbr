@@ -3715,6 +3715,98 @@ app.delete("/operacoes/:id", async (req, res) => {
   }
 });
 
+// ====================== EXPIRAR PENDENTES ======================
+app.post("/vendas-tokens/expirar-pendentes", async (req, res) => {
+  const session = req.app.locals.client.startSession();
+
+  try {
+    const db = req.app.locals.db;
+    const agora = new Date();
+
+    await session.withTransaction(async () => {
+
+      const expiradas = await db.collection("vendas_tokens")
+        .find(
+          {
+            status: "pending",
+            expiresAt: { $lt: agora }
+          },
+          {
+            projection: {
+              _id: 1,
+              propriedade_id: 1,
+              quantidade: 1
+            }
+          }
+        )
+        .limit(100)
+        .toArray();
+
+      if (expiradas.length === 0) {
+        console.log("✅ Nenhuma venda expirada");
+        return;
+      }
+
+      console.log(`⏳ Expirando ${expiradas.length} vendas`);
+
+      const ids = expiradas.map(v => v._id);
+
+      // 🔥 Atualiza SOMENTE se ainda estiver pending
+      const result = await db.collection("vendas_tokens").updateMany(
+        {
+          _id: { $in: ids },
+          status: "pending"
+        },
+        {
+          $set: {
+            status: "expired",
+            expiredAt: agora
+          }
+        },
+        { session }
+      );
+
+      if (result.modifiedCount === 0) {
+        console.log("⚠️ Nenhuma venda atualizada (concorrência)");
+        return;
+      }
+
+      // 🔥 Agrupa tokens somente das selecionadas
+      const agrupado = {};
+
+      for (const v of expiradas) {
+        if (!agrupado[v.propriedade_id]) {
+          agrupado[v.propriedade_id] = 0;
+        }
+        agrupado[v.propriedade_id] += v.quantidade;
+      }
+
+      const ops = Object.entries(agrupado).map(([propId, qtd]) => ({
+        updateOne: {
+          filter: { _id: propId },
+          update: {
+            $inc: { tokens_reservados: -qtd }
+          }
+        }
+      }));
+
+      if (ops.length > 0) {
+        await db.collection("propriedades").bulkWrite(ops, { session });
+      }
+
+    });
+
+    return res.json({ ok: true });
+
+  } catch (err) {
+    console.error("❌ Erro expirar pendentes:", err);
+    return res.status(500).json({ erro: err.message });
+
+  } finally {
+    await session.endSession();
+  }
+});
+
 //===================== EXPIRAR VENDA =====================
 app.post("/vendas-tokens/expirar", async (req, res) => {
   try {
@@ -3789,8 +3881,7 @@ app.post("/vendas-tokens/expirar", async (req, res) => {
   }
 });
 
-//==============CRIAR VENDAS==========
-
+// ====================== CRIAR VENDA (BLINDADA) ======================
 app.post("/vendas-tokens", async (req, res) => {
   const session = req.app.locals.client.startSession();
 
@@ -3801,11 +3892,10 @@ app.post("/vendas-tokens", async (req, res) => {
       propriedade_id
     } = req.body;
 
-    // 🔥 extrai corretamente
-    const quantidade = req.body.quantidade || req.body.items?.[0]?.quantity;
-    const valor = req.body.valor || req.body.items?.[0]?.value;
+    const quantidade = Number(req.body.quantidade);
+    const valor = Number(req.body.valor);
 
-    if (!externalReference || !propriedade_id || !quantidade) {
+    if (!externalReference || !propriedade_id || !quantidade || !valor) {
       return res.status(400).json({
         erro: "Dados obrigatórios faltando"
       });
@@ -3813,57 +3903,26 @@ app.post("/vendas-tokens", async (req, res) => {
 
     const db = req.app.locals.db;
 
-    // 🔎 1. BUSCA PROPRIEDADE (ANTES DA TRANSAÇÃO)
-    const prop = await db.collection("propriedades").findOne({ _id: propriedade_id });
-
-    if (!prop) {
-      return res.status(404).json({
-        erro: "Propriedade não encontrada"
-      });
-    }
-
-    // 🔥 2. VALIDAÇÃO DE INTEGRIDADE
-    if (prop.tokens_autorizados > prop.tokenqtd) {
-      return res.status(400).json({
-        erro: "tokens_autorizados maior que total emitido"
-      });
-    }
-
-    if (prop.tokens_autorizados < 0) {
-      return res.status(400).json({
-        erro: "tokens_autorizados inválido"
-      });
-    }
-
-    if (prop.vendidos < 0 || prop.tokens_reservados < 0) {
-      return res.status(400).json({
-        erro: "valores negativos inválidos"
-      });
-    }
-
-    // 📊 DEBUG (AJUDA MUITO)
-    const disponivel = prop.tokens_autorizados - prop.vendidos - prop.tokens_reservados;
-
-    console.log("📊 Estoque:", {
-      propriedade_id,
-      totalEmitido: prop.tokenqtd,
-      autorizados: prop.tokens_autorizados,
-      vendidos: prop.vendidos,
-      reservados: prop.tokens_reservados,
-      disponivel,
-      tentandoComprar: quantidade
-    });
-
     const agora = new Date();
     const expiraEmMinutos = 10;
     const expiresAt = new Date(agora.getTime() + expiraEmMinutos * 60000);
 
-    // 🔒 3. TRANSAÇÃO
+    console.log("🛒 Nova tentativa de compra:", {
+      externalReference,
+      propriedade_id,
+      quantidade
+    });
+
     await session.withTransaction(async () => {
 
+      // =========================
+      // 🔒 RESERVA ATÔMICA (ANTI-OVERSALE)
+      // =========================
       const reserva = await db.collection("propriedades").updateOne(
         {
           _id: propriedade_id,
+
+          // 🔥 BLINDAGEM DE ESTOQUE
           $expr: {
             $gte: [
               {
@@ -3877,37 +3936,57 @@ app.post("/vendas-tokens", async (req, res) => {
           }
         },
         {
-          $inc: { tokens_reservados: quantidade }
+          $inc: {
+            tokens_reservados: quantidade
+          }
         },
         { session }
       );
 
+      // 🚫 SEM ESTOQUE
       if (reserva.modifiedCount === 0) {
-        throw new Error("Tokens indisponíveis (overselling evitado)");
+        console.log("❌ Tokens indisponíveis");
+        throw new Error("Tokens indisponíveis");
       }
 
+      // =========================
+      // 📄 CRIA VENDA
+      // =========================
       await db.collection("vendas_tokens").insertOne({
-	_id: String(externalReference),
+        _id: String(externalReference),
         externalReference,
-        paymentId: null, // será atualizado no webhook
+
         cliente_id,
         propriedade_id,
+
+        paymentId: null,
+
+        status: "pending",
+
         quantidade,
         valor,
-        status: "pending",
+
+        createdAt: agora,
         expiresAt,
-        createdAt: agora
+
+        paidAt: null,
+        expiredAt: null,
+        canceledAt: null
+
       }, { session });
 
+      console.log("✅ Venda criada com sucesso");
     });
 
     return res.json({
       ok: true,
+      externalReference,
       expiresAt
     });
 
   } catch (err) {
-    console.error("❌ Erro ao criar venda:", err);
+
+    console.error("❌ Erro ao criar venda:", err.message);
 
     return res.status(500).json({
       erro: err.message
@@ -3945,135 +4024,183 @@ app.put("/vendas-tokens/status", async (req, res) => {
   }
 });
 
-//===================== WEBHOOK VENDAS ==============
-
+// ====================== WEBHOOK VENDAS (ROBUSTO FINAL) ======================
 app.post("/vendas-tokens/webhook", async (req, res) => {
+  const session = req.app.locals.client.startSession();
+
   try {
-    console.log("🔥 WEBHOOK RENDER RECEBIDO");
+    const { event, payment } = req.body;
 
-    const evento = req.body;
-
-    console.log("📩 Evento:", JSON.stringify(evento, null, 2));
-
-    const payment = evento.payment;
-    const event = evento.event;
-
-    if (!payment || !event) {
-      console.log("❌ Payload inválido");
+    if (!event || !payment) {
       return res.sendStatus(200);
     }
 
     const paymentId = payment.id;
-    const status = payment.status;
     const venda_id = payment.externalReference;
 
-    console.log("📊 EVENT:", event);
-    console.log("💳 paymentId:", paymentId);
-    console.log("🧾 venda_id:", venda_id);
-    console.log("📌 status:", status);
-
     if (!venda_id) {
-      console.log("❌ externalReference não veio");
       return res.sendStatus(200);
     }
 
     const db = req.app.locals.db;
-
-    if (!db) {
-      console.error("❌ DB não conectado");
-      return res.sendStatus(500);
-    }
-
     const vendas = db.collection("vendas_tokens");
     const propriedades = db.collection("propriedades");
 
-    // =========================
-    // 1️⃣ BUSCAR VENDA
-    // =========================
-    const venda = await vendas.findOne({ _id: venda_id });
+    await session.withTransaction(async () => {
 
-    if (!venda) {
-      console.log("❌ Venda não encontrada:", venda_id);
-      return res.sendStatus(200);
-    }
+      const venda = await vendas.findOne({ _id: venda_id }, { session });
 
-    console.log("📦 Venda encontrada:", venda._id);
+      if (!venda) {
+        console.log("❌ Venda não encontrada:", venda_id);
+        return;
+      }
 
-    // 🔒 PROTEÇÃO DUPLICIDADE
-    if (venda.status === "paid" || venda.status === "canceled") {
-      console.log("⚠️ Evento duplicado ignorado");
-      return res.sendStatus(200);
-    }
+      const agora = new Date();
 
-    // =========================
-    // 2️⃣ PAGAMENTO CONFIRMADO
-    // =========================
-    if (event === "PAYMENT_RECEIVED" || event === "PAYMENT_CONFIRMED") {
+      // 🔒 1. IDEMPOTÊNCIA GLOBAL
+      if (venda.status !== "pending") {
+        console.log("⚠️ Evento ignorado (já resolvido):", venda.status);
+        return;
+      }
 
-      console.log("✅ PAGAMENTO CONFIRMADO");
+      // 🔒 2. PAGAMENTO APÓS EXPIRAÇÃO (bloqueio crítico)
+      if (new Date(venda.expiresAt) < agora) {
+        console.log("⚠️ Pagamento após expiração → marcado como expired");
 
-      await vendas.updateOne(
-        { _id: venda_id },
-        {
-          $set: {
-            status: "paid",
-            paymentId,
-            paidAt: new Date()
-          }
-        }
-      );
+        await vendas.updateOne(
+          { _id: venda_id, status: "pending" },
+          {
+            $set: {
+              status: "expired",
+              paymentId,
+              expiredAt: agora
+            }
+          },
+          { session }
+        );
 
-      await propriedades.updateOne(
-        { _id: venda.propriedade_id },
-        {
-          $inc: {
-            tokens_reservados: -venda.quantidade,
-            vendidos: venda.quantidade
-          }
-        }
-      );
+        await propriedades.updateOne(
+          { _id: venda.propriedade_id },
+          {
+            $inc: {
+              tokens_reservados: -venda.quantidade
+            }
+          },
+          { session }
+        );
 
-      console.log("🎉 Tokens liberados com sucesso");
-    }
+        return;
+      }
 
-    // =========================
-    // 3️⃣ CANCELADO / EXPIRADO
-    // =========================
-    if (
-      event === "PAYMENT_OVERDUE" ||
-      event === "PAYMENT_DELETED"
-    ) {
+      // =========================
+      // ✅ PAGAMENTO CONFIRMADO
+      // =========================
+      if (event === "PAYMENT_RECEIVED" || event === "PAYMENT_CONFIRMED") {
 
-      console.log("⚠️ PAGAMENTO CANCELADO/EXPIRADO");
+        console.log("✅ PAGAMENTO CONFIRMADO");
 
-      await vendas.updateOne(
-        { _id: venda_id },
-        {
-          $set: {
-            status: "canceled",
-            paymentId,
-            canceledAt: new Date()
-          }
-        }
-      );
+        await vendas.updateOne(
+          { _id: venda_id, status: "pending" },
+          {
+            $set: {
+              status: "paid",
+              paymentId,
+              paidAt: agora
+            }
+          },
+          { session }
+        );
 
-      await propriedades.updateOne(
-        { _id: venda.propriedade_id },
-        {
-          $inc: {
-            tokens_reservados: -venda.quantidade
-          }
-        }
-      );
+        await propriedades.updateOne(
+          { _id: venda.propriedade_id },
+          {
+            $inc: {
+              tokens_reservados: -venda.quantidade,
+              vendidos: venda.quantidade
+            }
+          },
+          { session }
+        );
 
-      console.log("🔄 Tokens devolvidos ao estoque");
-    }
+        return;
+      }
+
+      // =========================
+      // ⏳ EXPIRADO (ASAAS)
+      // =========================
+      if (event === "PAYMENT_OVERDUE") {
+
+        console.log("⏳ PAGAMENTO EXPIRADO (ASAAS)");
+
+        await vendas.updateOne(
+          { _id: venda_id, status: "pending" },
+          {
+            $set: {
+              status: "expired",
+              paymentId,
+              expiredAt: agora
+            }
+          },
+          { session }
+        );
+
+        await propriedades.updateOne(
+          { _id: venda.propriedade_id },
+          {
+            $inc: {
+              tokens_reservados: -venda.quantidade
+            }
+          },
+          { session }
+        );
+
+        return;
+      }
+
+      // =========================
+      // ❌ CANCELADO
+      // =========================
+      if (event === "PAYMENT_DELETED") {
+
+        console.log("❌ PAGAMENTO CANCELADO");
+
+        await vendas.updateOne(
+          { _id: venda_id, status: "pending" },
+          {
+            $set: {
+              status: "canceled",
+              paymentId,
+              canceledAt: agora
+            }
+          },
+          { session }
+        );
+
+        await propriedades.updateOne(
+          { _id: venda.propriedade_id },
+          {
+            $inc: {
+              tokens_reservados: -venda.quantidade
+            }
+          },
+          { session }
+        );
+
+        return;
+      }
+
+      console.log("ℹ️ Evento ignorado:", event);
+
+    });
 
     return res.sendStatus(200);
 
   } catch (err) {
     console.error("❌ Erro webhook:", err);
     return res.sendStatus(500);
+
+  } finally {
+    await session.endSession();
   }
 });
 
