@@ -4204,6 +4204,69 @@ app.post("/vendas-tokens/webhook", async (req, res) => {
   }
 });
 
+//==================== CANCELAR VENDAS ==================== 
+
+app.post("/vendas-tokens/cancelar", async (req, res) => {
+  const session = req.app.locals.client.startSession();
+
+  try {
+    const { externalReference } = req.body;
+
+    const db = req.app.locals.db;
+
+    await session.withTransaction(async () => {
+
+      const venda = await db.collection("vendas_tokens").findOne(
+        {
+          _id: externalReference,
+          status: "pending"
+        },
+        { session }
+      );
+
+      if (!venda) {
+        return;
+      }
+
+      await db.collection("vendas_tokens").updateOne(
+        {
+          _id: externalReference,
+          status: "pending"
+        },
+        {
+          $set: {
+            status: "canceled",
+            canceledAt: new Date()
+          }
+        },
+        { session }
+      );
+
+      await db.collection("propriedades").updateOne(
+        {
+          _id: venda.propriedade_id
+        },
+        {
+          $inc: {
+            tokens_reservados: -venda.quantidade
+          }
+        },
+        { session }
+      );
+
+    });
+
+    return res.json({ ok: true });
+
+  } catch (err) {
+    console.error("Erro cancelar venda:", err);
+    return res.status(500).json({ erro: err.message });
+
+  } finally {
+    await session.endSession();
+  }
+});
+
 // ================= CRIAR PAGAMENTO PIX =================
 
 
