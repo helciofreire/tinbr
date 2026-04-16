@@ -4024,6 +4024,45 @@ app.put("/vendas-tokens/status", async (req, res) => {
   }
 });
 
+// ====================== BUSCAR VENDA POR EXTERNAL REFERENCE ======================
+app.get("/vendas-tokens/:id", async (req, res) => {
+  try {
+    const id = String(req.params.id);
+
+    const venda = await db.collection("vendas_tokens").findOne({
+      _id: id
+    });
+
+    if (!venda) {
+      return res.status(404).json({
+        erro: "Venda não encontrada"
+      });
+    }
+
+    res.json({
+      ok: true,
+      externalReference: venda.externalReference,
+      status: venda.status,
+      quantidade: venda.quantidade,
+      valor: venda.valor,
+      createdAt: venda.createdAt,
+      expiresAt: venda.expiresAt,
+      paidAt: venda.paidAt,
+      expiredAt: venda.expiredAt,
+      canceledAt: venda.canceledAt
+    });
+
+  } catch (err) {
+    console.error("❌ Erro ao buscar venda:", err);
+
+    res.status(500).json({
+      ok: false,
+      erro: "Erro interno ao buscar venda"
+    });
+  }
+});
+
+
 // ====================== WEBHOOK VENDAS (ROBUSTO FINAL) ======================
 app.post("/vendas-tokens/webhook", async (req, res) => {
   const session = req.app.locals.client.startSession();
