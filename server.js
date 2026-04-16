@@ -4511,76 +4511,109 @@ app.delete("/mercado/:id", async (req, res) => {
 // ======================= LOGIN =======================
 app.post("/users/login", async (req, res) => {
   try {
+    const db = req.app.locals.db;
+
     const { email, cpf, senha } = req.body;
-    
-    console.log("🔐 Tentativa de login:", { 
-      email: email?.substring(0, 10) + '...', 
-      cpf: cpf?.substring(0, 3) + '...',
-      temSenha: !!senha 
+
+    console.log("🔐 Tentativa de login:", {
+      email: email?.substring(0, 10) + "...",
+      cpf: cpf?.substring(0, 3) + "...",
+      temSenha: !!senha
     });
 
-    // ✅ BUSCA O USUÁRIO
-    let usuario;
-    if (email) {
-      usuario = await db.collection("users").findOne({ 
-        email: email.trim().toLowerCase() 
+    /* ================= VALIDAR INPUT ================= */
+    if ((!email && !cpf) || !senha) {
+      return res.status(400).json({
+        ok: false,
+        mensagem: "Login e senha são obrigatórios."
       });
-    } else if (cpf) {
-      const cpfLimpo = cpf.replace(/\D/g, '');
-      usuario = await db.collection("users").findOne({ 
-        documento: cpfLimpo 
+    }
+
+    /* ================= BUSCAR USUÁRIO ================= */
+    let usuario;
+
+    if (email) {
+      usuario = await db.collection("users").findOne({
+        email: email.trim().toLowerCase()
       });
     } else {
-      return res.json({ 
-        ok: false, 
-        mensagem: "Email ou CPF é obrigatório." 
+      const cpfLimpo = cpf.replace(/\D/g, "");
+
+      usuario = await db.collection("users").findOne({
+        documento: cpfLimpo
       });
     }
 
     if (!usuario) {
       console.log("❌ Usuário não encontrado");
-      return res.json({ 
-        ok: false, 
-        mensagem: "Usuário não encontrado." 
+
+      return res.json({
+        ok: false,
+        mensagem: "Usuário não encontrado."
       });
     }
 
-    // ✅ VERIFICA SENHA COM BCRYPT
-    console.log("🔑 Comparando senha...");
-    const senhaValida = await bcrypt.compare(senha, usuario.senha);
-    console.log("✅ Resultado da comparação:", senhaValida);
+    /* ================= VALIDAR SENHA ================= */
+    const senhaValida = await bcrypt.compare(
+      senha,
+      usuario.senha
+    );
 
     if (!senhaValida) {
-      return res.json({ 
-        ok: false, 
-        mensagem: "Senha incorreta." 
+      console.log("❌ Senha incorreta");
+
+      return res.json({
+        ok: false,
+        mensagem: "Senha incorreta."
       });
     }
 
-    // ✅ SUCESSO
+    /* ================= BUSCAR CLIENTE RELACIONADO ================= */
+    let walletCliente = null;
+
+    if (usuario.cliente_id) {
+      const cliente = await db.collection("clientes").findOne(
+        { _id: usuario.cliente_id },
+        {
+          projection: {
+            walletId: 1
+          }
+        }
+      );
+
+      walletCliente = cliente?.walletId || null;
+    }
+
+    /* ================= SUCESSO ================= */
     console.log("✅ Login bem-sucedido:", usuario.nome);
-    res.json({
+
+    return res.json({
       ok: true,
+
       usuario: usuario._id,
-      documento: usuario.documento,		
+      documento: usuario.documento,
       nome: usuario.nome,
       nivel: usuario.nivel,
       cliente_id: usuario.cliente_id,
       proprietario: usuario.proprietario,
+
+      wallet_use: usuario.walletId || null,
+      wallet_cli: walletCliente,
+
       mensagem: "Login realizado com sucesso."
     });
 
   } catch (erro) {
-  console.error("❌ ERRO REAL:", erro);
-  
-  res.status(500).json({ 
-    ok: false, 
-    mensagem: erro.message // 👈 MOSTRA O ERRO REAL
-  });
-}
+    console.error("❌ ERRO LOGIN:", erro);
+
+    return res.status(500).json({
+      ok: false,
+      mensagem: erro.message || "Erro interno no servidor."
+    });
+  }
 });
 
-//==========================================================
+//=========================HEALTH============================
 app.get("/health", (req, res) => res.json({ status: "ok" }));
 
 const PORT = process.env.PORT || 10000;
