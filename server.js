@@ -3717,7 +3717,111 @@ app.delete("/operacoes/:id", async (req, res) => {
 
 //============== FUNÇÃO EXPIRA PENDENTES=================
 
-async function expirarPendentes(db, client) {
+async function expirarPendentes(db, session) {
+  const agora = new Date();
+
+  // =========================
+  // 1. BUSCA IDs VENCIDOS
+  // =========================
+  const vencidas = await db.collection("vendas_tokens")
+    .find(
+      {
+        status: "pending",
+        expiresAt: { $lt: agora }
+      },
+      {
+        projection: { _id: 1 },
+        session
+      }
+    )
+    .limit(500)
+    .toArray();
+
+  if (vencidas.length === 0) return;
+
+  const ids = vencidas.map(v => v._id);
+
+  // =========================
+  // 2. EXPIRA (COM REVALIDAÇÃO)
+  // =========================
+  const result = await db.collection("vendas_tokens").updateMany(
+    {
+      _id: { $in: ids },
+      status: "pending",
+      expiresAt: { $lt: agora }
+    },
+    {
+      $set: {
+        status: "expired",
+        expiredAt: agora
+      }
+    },
+    { session }
+  );
+
+  if (result.modifiedCount === 0) return;
+
+  // =========================
+  // 3. BUSCA SOMENTE AS EXPIRADAS AGORA
+  // =========================
+  const expiradasReais = await db.collection("vendas_tokens")
+    .find(
+      {
+        _id: { $in: ids },
+        status: "expired",
+        expiredAt: agora
+      },
+      {
+        projection: {
+          propriedade_id: 1,
+          quantidade: 1
+        },
+        session
+      }
+    )
+    .toArray();
+
+  if (expiradasReais.length === 0) return;
+
+  // =========================
+  // 4. AGRUPA
+  // =========================
+  const agrupado = {};
+
+  for (const v of expiradasReais) {
+    if (!agrupado[v.propriedade_id]) {
+      agrupado[v.propriedade_id] = 0;
+    }
+    agrupado[v.propriedade_id] += v.quantidade;
+  }
+
+  // =========================
+  // 5. DEVOLVE TOKENS
+  // =========================
+  const ops = Object.entries(agrupado).map(([propId, qtd]) => ({
+    updateOne: {
+      filter: { _id: propId },
+      update: {
+        $inc: {
+          tokens_reservados: -qtd
+        }
+      }
+    }
+  }));
+
+  if (ops.length > 0) {
+    await db.collection("propriedades").bulkWrite(ops, { session });
+  }
+
+  console.log("🧹 Expiradas:", result.modifiedCount);
+}
+
+
+//===================== EXPIRAR VENDA =====================
+app.post("/vendas-tokens/expirar", async (req, res) => {
+  const client = req.app.locals.client;
+  const db = req.app.locals.db;
+
   const session = client.startSession();
 
   try {
@@ -3726,37 +3830,25 @@ async function expirarPendentes(db, client) {
     await session.withTransaction(async () => {
 
       // =========================
-      // 1. BUSCA VENCIDOS
+      // 1. BUSCA VENDA (VALIDADA)
       // =========================
-      const vencidas = await db.collection("vendas_tokens")
-        .find(
-          {
-            status: "pending",
-            expiresAt: { $lt: agora }
-          },
-          {
-            projection: {
-              _id: 1,
-              propriedade_id: 1,
-              quantidade: 1
-            }
-          }
-        )
-        .limit(500) // 🔥 proteção
-        .toArray();
+      const venda = await db.collection("vendas_tokens").findOne(
+        {
+          _id: req.body.externalReference,
+          status: "pending",
+          expiresAt: { $lt: agora } // 🔥 CRÍTICO
+        },
+        { session }
+      );
 
-      if (vencidas.length === 0) {
-        return;
-      }
-
-      const ids = vencidas.map(v => v._id);
+      if (!venda) return;
 
       // =========================
       // 2. EXPIRA COM REVALIDAÇÃO
       // =========================
-      const result = await db.collection("vendas_tokens").updateMany(
+      const result = await db.collection("vendas_tokens").updateOne(
         {
-          _id: { $in: ids },
+          _id: venda._id,
           status: "pending",
           expiresAt: { $lt: agora }
         },
@@ -3769,216 +3861,32 @@ async function expirarPendentes(db, client) {
         { session }
       );
 
-      if (result.modifiedCount === 0) {
-        return;
-      }
+      if (result.modifiedCount === 0) return;
 
       // =========================
-      // 3. AGRUPA POR PROPRIEDADE
+      // 3. DEVOLVE TOKENS
       // =========================
-      const agrupado = {};
-
-      for (const v of vencidas) {
-        if (!agrupado[v.propriedade_id]) {
-          agrupado[v.propriedade_id] = 0;
-        }
-        agrupado[v.propriedade_id] += v.quantidade;
-      }
-
-      // =========================
-      // 4. DEVOLVE TOKENS
-      // =========================
-      const ops = Object.entries(agrupado).map(([propId, qtd]) => ({
-        updateOne: {
-          filter: { _id: propId },
-          update: {
-            $inc: {
-              tokens_reservados: -qtd
-            }
-          }
-        }
-      }));
-
-      if (ops.length > 0) {
-        await db.collection("propriedades")
-          .bulkWrite(ops, { session });
-      }
-
-      console.log("🧹 Expiradas:", result.modifiedCount);
-    });
-
-  } catch (err) {
-    console.error("❌ Erro expirarPendentes:", err);
-  } finally {
-    await session.endSession();
-  }
-}
-
-// ====================== EXPIRAR PENDENTES ======================
-app.post("/vendas-tokens/expirar-pendentes", async (req, res) => {
-  const session = req.app.locals.client.startSession();
-
-  try {
-    const db = req.app.locals.db;
-    const agora = new Date();
-
-    await session.withTransaction(async () => {
-
-      // =========================
-      // 🔒 BUSCA APENAS IDS (leve)
-      // =========================
-      const expiradas = await db.collection("vendas_tokens")
-        .find(
-          {
-            status: "pending",
-            expiresAt: { $lt: agora }
-          },
-          {
-            projection: {
-              _id: 1
-            }
-          }
-        )
-        .limit(100)
-        .toArray();
-
-      if (expiradas.length === 0) {
-        return;
-      }
-
-      const ids = expiradas.map(v => v._id);
-
-      // =========================
-      // 🔥 ATUALIZA COM PROTEÇÃO
-      // =========================
-      const result = await db.collection("vendas_tokens").updateMany(
+      await db.collection("propriedades").updateOne(
+        { _id: venda.propriedade_id },
         {
-          _id: { $in: ids },
-          status: "pending",
-          expiresAt: { $lt: agora } // 🔥 REVALIDA AQUI
-        },
-        {
-          $set: {
-            status: "expired",
-            expiredAt: agora
+          $inc: {
+            tokens_reservados: -venda.quantidade
           }
         },
         { session }
       );
 
-      if (result.modifiedCount === 0) {
-        return;
-      }
-
-      // =========================
-      // 🔒 BUSCA SOMENTE AS REALMENTE EXPIRADAS AGORA
-      // =========================
-      const expiradasReais = await db.collection("vendas_tokens")
-        .find(
-          {
-            _id: { $in: ids },
-            status: "expired",
-            expiredAt: agora
-          },
-          {
-            projection: {
-              propriedade_id: 1,
-              quantidade: 1
-            }
-          }
-        )
-        .toArray();
-
-      if (expiradasReais.length === 0) {
-        return;
-      }
-
-      // =========================
-      // 🔥 AGRUPA POR PROPRIEDADE
-      // =========================
-      const agrupado = {};
-
-      for (const v of expiradasReais) {
-        if (!agrupado[v.propriedade_id]) {
-          agrupado[v.propriedade_id] = 0;
-        }
-        agrupado[v.propriedade_id] += v.quantidade;
-      }
-
-      // =========================
-      // 🔒 ATUALIZA PROPRIEDADES
-      // =========================
-      const ops = Object.entries(agrupado).map(([propId, qtd]) => ({
-        updateOne: {
-          filter: { _id: propId },
-          update: {
-            $inc: {
-              tokens_reservados: -qtd
-            }
-          }
-        }
-      }));
-
-      if (ops.length > 0) {
-        await db.collection("propriedades").bulkWrite(ops, { session });
-      }
-
     });
 
     return res.json({ ok: true });
 
   } catch (err) {
-    console.error("❌ Erro expirar pendentes:", err);
+    console.error("❌ Erro expirar venda:", err);
     return res.status(500).json({ erro: err.message });
 
   } finally {
     await session.endSession();
   }
-});
-
-//===================== EXPIRAR VENDA =====================
-app.post("/vendas-tokens/expirar", async (req, res) => {
-  const db = req.app.locals.db;
-
-  const agora = new Date();
-
-  const venda = await db.collection("vendas_tokens").findOne({
-    _id: req.body.externalReference
-  });
-
-  if (!venda) return res.json({ ok: true });
-
-  if (venda.status !== "pending") {
-    return res.json({ ok: true });
-  }
-
-  const result = await db.collection("vendas_tokens").updateOne(
-    {
-      _id: venda._id,
-      status: "pending"
-    },
-    {
-      $set: {
-        status: "expired",
-        expiredAt: agora
-      }
-    }
-  );
-
-  if (result.modifiedCount === 0) {
-    return res.json({ ok: true });
-  }
-
-  await db.collection("propriedades").updateOne(
-    { _id: venda.propriedade_id },
-    {
-      $inc: {
-        tokens_reservados: -venda.quantidade
-      }
-    }
-  );
-
-  return res.json({ ok: true, expired: true });
 });
 
 // ====================== CRIAR VENDA (ULTRA BLINDADA FINAL COM LIMPEZA) ======================
@@ -3990,16 +3898,6 @@ app.post("/vendas-tokens", async (req, res) => {
   const session = client.startSession();
 
   try {
-
-    // =========================
-    // 🧹 LIMPA PENDENTES (GARANTIDO NO BACKEND)
-    // =========================
-    try {
-      await expirarPendentes(db, client);
-    } catch (err) {
-      console.error("⚠️ Falha ao limpar pendentes:", err);
-      // 🔥 NÃO quebra a venda
-    }
 
     const {
       externalReference,
@@ -4031,8 +3929,11 @@ app.post("/vendas-tokens", async (req, res) => {
 
     await session.withTransaction(async () => {
 
+      // 🔥 LIMPA EXPIRADAS (MESMA TRANSAÇÃO)
+      await expirarPendentes(db, session);
+
       // =========================
-      // 🔒 1. RESERVA ATÔMICA
+      // 🔒 RESERVA ATÔMICA
       // =========================
       const reserva = await db.collection("propriedades").updateOne(
         {
@@ -4062,7 +3963,7 @@ app.post("/vendas-tokens", async (req, res) => {
       }
 
       // =========================
-      // 📄 2. INSERT IDEMPOTENTE
+      // 📄 INSERT IDEMPOTENTE
       // =========================
       const insertResult = await db.collection("vendas_tokens").updateOne(
         { _id: String(externalReference) },
@@ -4092,12 +3993,9 @@ app.post("/vendas-tokens", async (req, res) => {
         { upsert: true, session }
       );
 
-      // =========================
-      // 🔒 IDMPOTÊNCIA REAL + ROLLBACK
-      // =========================
       if (insertResult.upsertedCount === 0) {
 
-        // 🔥 desfaz reserva
+        // 🔥 rollback da reserva
         await db.collection("propriedades").updateOne(
           { _id: propriedade_id },
           {
@@ -4113,9 +4011,6 @@ app.post("/vendas-tokens", async (req, res) => {
 
     });
 
-    // =========================
-    // ✅ SUCESSO
-    // =========================
     return res.json({
       ok: true,
       externalReference,
@@ -4140,6 +4035,42 @@ app.post("/vendas-tokens", async (req, res) => {
 
   } finally {
     await session.endSession();
+  }
+});
+
+//=====================VENDAS ATIVAS===================
+
+app.get("/vendas-tokens/ativa/:usuario_id/:propriedade_id", async (req, res) => {
+  try {
+    const { usuario_id, propriedade_id } = req.params;
+    const db = req.app.locals.db;
+
+    const venda = await db.collection("vendas_tokens").findOne(
+      {
+        usuario_id,
+        propriedade_id,
+        status: "pending",
+        paymentId: null, // 🔥 proteção extra
+        expiresAt: { $gt: new Date() } // 🔥 evita expirada
+      },
+      {
+        sort: { createdAt: -1 }
+      }
+    );
+
+    if (!venda) {
+      return res.json({ ok: false });
+    }
+
+    return res.json({
+      ok: true,
+      externalReference: venda.externalReference,
+      expiresAt: venda.expiresAt
+    });
+
+  } catch (err) {
+    console.error("❌ erro buscar ativa:", err);
+    return res.status(500).json({ ok: false });
   }
 });
 
