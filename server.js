@@ -3715,6 +3715,105 @@ app.delete("/operacoes/:id", async (req, res) => {
   }
 });
 
+//============== FUNÇÃO EXPIRA PENDENTES=================
+
+async function expirarPendentes(db, client) {
+  const session = client.startSession();
+
+  try {
+    const agora = new Date();
+
+    await session.withTransaction(async () => {
+
+      // =========================
+      // 1. BUSCA VENCIDOS
+      // =========================
+      const vencidas = await db.collection("vendas_tokens")
+        .find(
+          {
+            status: "pending",
+            expiresAt: { $lt: agora }
+          },
+          {
+            projection: {
+              _id: 1,
+              propriedade_id: 1,
+              quantidade: 1
+            }
+          }
+        )
+        .limit(500) // 🔥 proteção
+        .toArray();
+
+      if (vencidas.length === 0) {
+        return;
+      }
+
+      const ids = vencidas.map(v => v._id);
+
+      // =========================
+      // 2. EXPIRA COM REVALIDAÇÃO
+      // =========================
+      const result = await db.collection("vendas_tokens").updateMany(
+        {
+          _id: { $in: ids },
+          status: "pending",
+          expiresAt: { $lt: agora }
+        },
+        {
+          $set: {
+            status: "expired",
+            expiredAt: agora
+          }
+        },
+        { session }
+      );
+
+      if (result.modifiedCount === 0) {
+        return;
+      }
+
+      // =========================
+      // 3. AGRUPA POR PROPRIEDADE
+      // =========================
+      const agrupado = {};
+
+      for (const v of vencidas) {
+        if (!agrupado[v.propriedade_id]) {
+          agrupado[v.propriedade_id] = 0;
+        }
+        agrupado[v.propriedade_id] += v.quantidade;
+      }
+
+      // =========================
+      // 4. DEVOLVE TOKENS
+      // =========================
+      const ops = Object.entries(agrupado).map(([propId, qtd]) => ({
+        updateOne: {
+          filter: { _id: propId },
+          update: {
+            $inc: {
+              tokens_reservados: -qtd
+            }
+          }
+        }
+      }));
+
+      if (ops.length > 0) {
+        await db.collection("propriedades")
+          .bulkWrite(ops, { session });
+      }
+
+      console.log("🧹 Expiradas:", result.modifiedCount);
+    });
+
+  } catch (err) {
+    console.error("❌ Erro expirarPendentes:", err);
+  } finally {
+    await session.endSession();
+  }
+}
+
 // ====================== EXPIRAR PENDENTES ======================
 app.post("/vendas-tokens/expirar-pendentes", async (req, res) => {
   const session = req.app.locals.client.startSession();
@@ -3882,12 +3981,26 @@ app.post("/vendas-tokens/expirar", async (req, res) => {
   return res.json({ ok: true, expired: true });
 });
 
-// ====================== CRIAR VENDA (ULTRA BLINDADA FINAL CORRIGIDA) ======================
+// ====================== CRIAR VENDA (ULTRA BLINDADA FINAL COM LIMPEZA) ======================
 
 app.post("/vendas-tokens", async (req, res) => {
-  const session = req.app.locals.client.startSession();
+  const client = req.app.locals.client;
+  const db = req.app.locals.db;
+
+  const session = client.startSession();
 
   try {
+
+    // =========================
+    // 🧹 LIMPA PENDENTES (GARANTIDO NO BACKEND)
+    // =========================
+    try {
+      await expirarPendentes(db, client);
+    } catch (err) {
+      console.error("⚠️ Falha ao limpar pendentes:", err);
+      // 🔥 NÃO quebra a venda
+    }
+
     const {
       externalReference,
       cliente_id,
@@ -3913,15 +4026,13 @@ app.post("/vendas-tokens", async (req, res) => {
       return res.status(400).json({ erro: "valor inválido" });
     }
 
-    const db = req.app.locals.db;
-
     const agora = new Date();
     const expiresAt = new Date(Date.now() + 10 * 60000);
 
     await session.withTransaction(async () => {
 
       // =========================
-      // 1. 🔒 RESERVA ATÔMICA (PRIMEIRO!)
+      // 🔒 1. RESERVA ATÔMICA
       // =========================
       const reserva = await db.collection("propriedades").updateOne(
         {
@@ -3951,7 +4062,7 @@ app.post("/vendas-tokens", async (req, res) => {
       }
 
       // =========================
-      // 2. 📄 INSERT IDEMPOTENTE
+      // 📄 2. INSERT IDEMPOTENTE
       // =========================
       const insertResult = await db.collection("vendas_tokens").updateOne(
         { _id: String(externalReference) },
@@ -3981,10 +4092,12 @@ app.post("/vendas-tokens", async (req, res) => {
         { upsert: true, session }
       );
 
-      // 🔒 idempotência real
+      // =========================
+      // 🔒 IDMPOTÊNCIA REAL + ROLLBACK
+      // =========================
       if (insertResult.upsertedCount === 0) {
 
-        // 🔥 rollback manual da reserva
+        // 🔥 desfaz reserva
         await db.collection("propriedades").updateOne(
           { _id: propriedade_id },
           {
@@ -4000,6 +4113,9 @@ app.post("/vendas-tokens", async (req, res) => {
 
     });
 
+    // =========================
+    // ✅ SUCESSO
+    // =========================
     return res.json({
       ok: true,
       externalReference,
