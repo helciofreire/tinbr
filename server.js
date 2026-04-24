@@ -1295,6 +1295,170 @@ app.delete("/users/:id", async (req, res) => {
   }
 });
 
+//========================DOCUMENTO=============================
+
+app.get("/resolver-documento/:documento", async (req, res) => {
+  try {
+    const documento = req.params.documento.replace(/\D/g, "");
+    const { cliente_id } = req.query;
+
+    if (!cliente_id) {
+      return res.status(400).json({ erro: "cliente_id obrigatório" });
+    }
+
+    // =========================
+    // 1. COMPRADORES (PRIORIDADE MÁXIMA)
+    // =========================
+    const comprador = await db.collection("compradores").findOne({
+      documento,
+      cliente_id
+    });
+
+    if (comprador) {
+      return res.json({
+        origem: "comprador",
+        data: comprador,
+        walletId: comprador.walletId || null,
+        accountId: comprador.accountId || null,
+        criarNovo: false
+      });
+    }
+
+    // =========================
+    // 2. USERS
+    // =========================
+    const user = await db.collection("users").findOne({
+      documento,
+      cliente_id
+    });
+
+    if (user) {
+      return res.json({
+        origem: "user",
+        data: user,
+        walletId: user.walletId || null,
+        accountId: user.accountId || null,
+        criarNovo: true
+      });
+    }
+
+    // =========================
+    // 3. PROPRIETÁRIOS
+    // =========================
+    const proprietario = await db.collection("proprietarios").findOne({
+      documento,
+      cliente_id
+    });
+
+    if (proprietario) {
+      return res.json({
+        origem: "proprietario",
+        data: proprietario,
+        walletId: proprietario.walletId || null,
+        accountId: proprietario.accountId || null,
+        criarNovo: true
+      });
+    }
+
+    // =========================
+    // 4. NÃO EXISTE
+    // =========================
+    return res.json({
+      origem: "novo",
+      data: null,
+      walletId: null,
+      accountId: null,
+      criarNovo: true
+    });
+
+  } catch (err) {
+    console.error("resolver-documento erro:", err);
+    res.status(500).json({ erro: "Erro interno" });
+  }
+});
+
+//===========================DOCUMENTO FINAL ===========================
+app.get("/resolver-documento/:documento", async (req, res) => {
+  try {
+
+    const documento = req.params.documento.replace(/\D/g, "");
+    const { cliente_id } = req.query;
+
+    if (!cliente_id) {
+      return res.status(400).json({ erro: "cliente_id obrigatório" });
+    }
+
+    // =========================
+    // 1. COMPRADOR (STOP TOTAL)
+    // =========================
+    const comprador = await db.collection("compradores").findOne({
+      documento,
+      cliente_id
+    });
+
+    if (comprador) {
+      return res.json({
+        origem: "comprador",
+        data: comprador,
+        walletId: comprador.walletId || null,
+        accountId: comprador.accountId || null,
+        criarNovo: false
+      });
+    }
+
+    // =========================
+    // 2. USER
+    // =========================
+    const user = await db.collection("users").findOne({
+      documento,
+      cliente_id
+    });
+
+    if (user) {
+      return res.json({
+        origem: "user",
+        data: user,
+        walletId: user.walletId || null,
+        accountId: user.accountId || null,
+        criarNovo: true
+      });
+    }
+
+    // =========================
+    // 3. PROPRIETÁRIO
+    // =========================
+    const prop = await db.collection("proprietarios").findOne({
+      documento,
+      cliente_id
+    });
+
+    if (prop) {
+      return res.json({
+        origem: "proprietario",
+        data: prop,
+        walletId: prop.walletId || null,
+        accountId: prop.accountId || null,
+        criarNovo: true
+      });
+    }
+
+    // =========================
+    // 4. NOVO
+    // =========================
+    return res.json({
+      origem: "novo",
+      data: null,
+      walletId: null,
+      accountId: null,
+      criarNovo: true
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ erro: "erro interno" });
+  }
+});
+
 // ======================= PLAYERS COM SEGURANÇA =======================
 
 // GET - Listar players APENAS do cliente
@@ -2665,48 +2829,55 @@ app.get("/propriedades/municipio", async (req, res) => {
 });
 
 
-// LISTAR PROPRIEDADES (dropdown) POR CLIENTE + PROPRIETÁRIO
+//====================== LISTAR PROPRIEDADES (dropdown) POR CLIENTE + PROPRIETÁRIO
+ 
 app.get("/propriedades-por-proprietario/dropdown", async (req, res) => {
   try {
     const { cliente_id, proprietario_id } = req.query;
 
     if (!cliente_id || !proprietario_id) {
       return res.status(400).json({
+        ok: false,
         erro: "cliente_id e proprietario_id são obrigatórios"
       });
     }
 
-const pipeline = [
-  {
-    $match: {
-      cliente_id,
-      proprietario_id
-    }
-  },
-  {
-    $project: {
-      _id: 0,
-      label: "$razao",               // ✅ campo correto
-      value: { $toString: "$_id" }
-    }
-  },
-  { $sort: { label: 1 } }
-];
+    const pipeline = [
+      {
+        $match: { cliente_id, proprietario_id }
+      },
+      {
+        $project: {
+          _id: 0,
+          label: "$razao",
+          value: { $toString: "$_id" }
+        }
+      },
+      { $sort: { label: 1 } }
+    ];
 
     const propriedades = await db
       .collection("propriedades")
       .aggregate(pipeline)
       .toArray();
 
-    res.json(propriedades);
+    return res.json({
+      ok: true,
+      data: propriedades,
+      vazio: propriedades.length === 0 // 🔥 chave
+    });
 
   } catch (err) {
     console.error("Erro ao buscar propriedades:", err);
-    res.status(500).json({ erro: "Erro interno ao buscar propriedades" });
+
+    return res.status(500).json({
+      ok: false,
+      erro: "Erro interno ao buscar propriedades"
+    });
   }
 });
 
-//VERIFICAR TOKENS VENDIDOS
+//============================VERIFICAR TOKENS VENDIDOS
 
 app.get("/verificar-tokens-vendidos", async (req, res) => {
   try {
