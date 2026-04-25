@@ -1389,11 +1389,10 @@ app.get("/resolver-documento/:documento", async (req, res) => {
     }
 
     // =========================
-    // 1. COMPRADOR (STOP TOTAL)
+    // 1. COMPRADOR (GLOBAL - SEM cliente_id)
     // =========================
     const comprador = await db.collection("compradores").findOne({
-      documento,
-      cliente_id
+      documento
     });
 
     if (comprador) {
@@ -1407,7 +1406,7 @@ app.get("/resolver-documento/:documento", async (req, res) => {
     }
 
     // =========================
-    // 2. PROPRIETÁRIO (AGORA VEM ANTES)
+    // 2. PROPRIETÁRIO
     // =========================
     const prop = await db.collection("proprietarios").findOne({
       documento,
@@ -1425,7 +1424,7 @@ app.get("/resolver-documento/:documento", async (req, res) => {
     }
 
     // =========================
-    // 3. USER (AGORA DEPOIS)
+    // 3. USER
     // =========================
     const user = await db.collection("users").findOne({
       documento,
