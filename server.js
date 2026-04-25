@@ -1407,25 +1407,7 @@ app.get("/resolver-documento/:documento", async (req, res) => {
     }
 
     // =========================
-    // 2. USER
-    // =========================
-    const user = await db.collection("users").findOne({
-      documento,
-      cliente_id
-    });
-
-    if (user) {
-      return res.json({
-        origem: "user",
-        data: user,
-        walletId: user.walletId || null,
-        accountId: user.accountId || null,
-        criarNovo: true
-      });
-    }
-
-    // =========================
-    // 3. PROPRIETÁRIO
+    // 2. PROPRIETÁRIO (AGORA VEM ANTES)
     // =========================
     const prop = await db.collection("proprietarios").findOne({
       documento,
@@ -1438,6 +1420,24 @@ app.get("/resolver-documento/:documento", async (req, res) => {
         data: prop,
         walletId: prop.walletId || null,
         accountId: prop.accountId || null,
+        criarNovo: true
+      });
+    }
+
+    // =========================
+    // 3. USER (AGORA DEPOIS)
+    // =========================
+    const user = await db.collection("users").findOne({
+      documento,
+      cliente_id
+    });
+
+    if (user) {
+      return res.json({
+        origem: "user",
+        data: user,
+        walletId: user.walletId || null,
+        accountId: user.accountId || null,
         criarNovo: true
       });
     }
