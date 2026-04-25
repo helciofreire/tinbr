@@ -1389,18 +1389,22 @@ app.get("/resolver-documento/:documento", async (req, res) => {
     }
 
     // =========================
-    // 1. COMPRADOR (GLOBAL - SEM cliente_id)
+    // 1. COMPRADOR (GLOBAL)
     // =========================
-    const comprador = await db.collection("compradores").findOne({
-      documento
-    });
+    const comprador = await db.collection("compradores")
+      .find({ documento })
+      .sort({ atualizadoEm: -1 }) // 🔥 pega o mais recente
+      .limit(1)
+      .toArray();
 
-    if (comprador) {
+    if (comprador.length > 0) {
+      const c = comprador[0];
+
       return res.json({
         origem: "comprador",
-        data: comprador,
-        walletId: comprador.walletId || null,
-        accountId: comprador.accountId || null,
+        data: c,
+        walletId: c.walletId || null,
+        accountId: c.accountId || null,
         criarNovo: false
       });
     }
