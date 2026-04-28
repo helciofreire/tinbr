@@ -860,6 +860,29 @@ app.put("/compradores/:id", async (req, res) => {
 
 // ======================= CLIENTES =======================
 
+//=========== GET - Buscar cliente por documento ===========
+app.get("/clientes/por-documento/:doc", async (req, res) => {
+  try {
+
+    const db = req.app.locals.db;
+
+    const doc = req.params.doc.replace(/\D/g, "");
+
+    const cliente = await db.collection("clientes").findOne(
+      { documento: doc },
+      { projection: { _id: 1 } }
+    );
+
+    return res.json({
+      existe: !!cliente
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ existe: false });
+  }
+});
+
 // GET - Listar todos os clientes
 app.get("/clientes", async (req, res) => {
   try {
@@ -1295,24 +1318,32 @@ app.delete("/users/:id", async (req, res) => {
   }
 });
 
-//========================DOCUMENTO=============================
-
+//===========================DOCUMENTO FINAL ===========================
 app.get("/resolver-documento/:documento", async (req, res) => {
   try {
+
     const documento = req.params.documento.replace(/\D/g, "");
     const { cliente_id } = req.query;
 
     if (!cliente_id) {
-      return res.status(400).json({ erro: "cliente_id obrigatório" });
+      return res.status(400).json({
+        erro: "cliente_id obrigatório"
+      });
+    }
+
+    if (!documento) {
+      return res.status(400).json({
+        erro: "documento inválido"
+      });
     }
 
     // =========================
-    // 1. COMPRADORES (PRIORIDADE MÁXIMA)
+    // 1. COMPRADOR GLOBAL
     // =========================
-    const comprador = await db.collection("compradores").findOne({
-      documento,
-      cliente_id
-    });
+    const comprador = await db.collection("compradores").findOne(
+      { documento },
+      { sort: { atualizadoEm: -1, createdAt: -1 } }
+    );
 
     if (comprador) {
       return res.json({
@@ -1325,7 +1356,7 @@ app.get("/resolver-documento/:documento", async (req, res) => {
     }
 
     // =========================
-    // 2. USERS
+    // 2. USER DO CLIENTE
     // =========================
     const user = await db.collection("users").findOne({
       documento,
@@ -1343,74 +1374,7 @@ app.get("/resolver-documento/:documento", async (req, res) => {
     }
 
     // =========================
-    // 3. PROPRIETÁRIOS
-    // =========================
-    const proprietario = await db.collection("proprietarios").findOne({
-      documento,
-      cliente_id
-    });
-
-    if (proprietario) {
-      return res.json({
-        origem: "proprietario",
-        data: proprietario,
-        walletId: proprietario.walletId || null,
-        accountId: proprietario.accountId || null,
-        criarNovo: true
-      });
-    }
-
-    // =========================
-    // 4. NÃO EXISTE
-    // =========================
-    return res.json({
-      origem: "novo",
-      data: null,
-      walletId: null,
-      accountId: null,
-      criarNovo: true
-    });
-
-  } catch (err) {
-    console.error("resolver-documento erro:", err);
-    res.status(500).json({ erro: "Erro interno" });
-  }
-});
-
-//===========================DOCUMENTO FINAL ===========================
-app.get("/resolver-documento/:documento", async (req, res) => {
-  try {
-
-    const documento = req.params.documento.replace(/\D/g, "");
-    const { cliente_id } = req.query;
-
-    if (!cliente_id) {
-      return res.status(400).json({ erro: "cliente_id obrigatório" });
-    }
-
-    // =========================
-    // 1. COMPRADOR (GLOBAL)
-    // =========================
-    const comprador = await db.collection("compradores")
-      .find({ documento })
-      .sort({ atualizadoEm: -1 }) // 🔥 pega o mais recente
-      .limit(1)
-      .toArray();
-
-    if (comprador.length > 0) {
-      const c = comprador[0];
-
-      return res.json({
-        origem: "comprador",
-        data: c,
-        walletId: c.walletId || null,
-        accountId: c.accountId || null,
-        criarNovo: false
-      });
-    }
-
-    // =========================
-    // 2. PROPRIETÁRIO
+    // 3. PROPRIETÁRIO DO CLIENTE
     // =========================
     const prop = await db.collection("proprietarios").findOne({
       documento,
@@ -1428,24 +1392,6 @@ app.get("/resolver-documento/:documento", async (req, res) => {
     }
 
     // =========================
-    // 3. USER
-    // =========================
-    const user = await db.collection("users").findOne({
-      documento,
-      cliente_id
-    });
-
-    if (user) {
-      return res.json({
-        origem: "user",
-        data: user,
-        walletId: user.walletId || null,
-        accountId: user.accountId || null,
-        criarNovo: true
-      });
-    }
-
-    // =========================
     // 4. NOVO
     // =========================
     return res.json({
@@ -1457,8 +1403,12 @@ app.get("/resolver-documento/:documento", async (req, res) => {
     });
 
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ erro: "erro interno" });
+
+    console.error("resolver-documento erro:", err);
+
+    return res.status(500).json({
+      erro: "erro interno"
+    });
   }
 });
 
