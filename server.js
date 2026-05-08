@@ -1052,38 +1052,88 @@ app.get("/users", async (req, res) => {
   }
 });
 
-// GET - Buscar usuário por documento COM verificação de cliente
+// GET - Buscar usuário por documento COM fallback em compradores
 app.get("/users/documento/:documento", async (req, res) => {
   try {
+
     const documento = req.params.documento;
     const { cliente_id } = req.query;
-    
-    console.log("🔍 Buscando usuário por documento:", documento, "cliente_id:", cliente_id);
-    
+
+    console.log(
+      "🔍 Buscando usuário por documento:",
+      documento,
+      "cliente_id:",
+      cliente_id
+    );
+
     if (!cliente_id) {
-      return res.status(400).json({ erro: "cliente_id é obrigatório na query" });
-    }
-    
-    if (!documento) {
-      return res.status(400).json({ erro: "Documento é obrigatório" });
+      return res.status(400).json({
+        erro: "cliente_id é obrigatório na query"
+      });
     }
 
-    // ✅ Busca pelo documento (CPF/CNPJ) E verifica se pertence ao cliente
-    const user = await db.collection("users").findOne({ 
-      documento: documento,
-      cliente_id: cliente_id // ✅ Só retorna se pertencer ao cliente
-    });
-    
-    if (!user) {
-      return res.status(404).json({ erro: "Usuário não encontrado" });
+    if (!documento) {
+      return res.status(400).json({
+        erro: "Documento é obrigatório"
+      });
     }
-    
-    console.log("✅ Usuário encontrado:", user.nome);
-    res.json(user);
-    
+
+    // =========================
+    // 1. BUSCA EM USERS
+    // =========================
+    const user = await db.collection("users").findOne({
+      documento: documento,
+      cliente_id: cliente_id
+    });
+
+    if (user) {
+
+      console.log("✅ Usuário encontrado em users:", user.nome);
+
+      return res.json({
+        origem: "users",
+        dados: user
+      });
+    }
+
+    // =========================
+    // 2. FALLBACK EM COMPRADORES
+    // BUSCA POR cpfresp
+    // =========================
+    const comprador = await db.collection("compradores").findOne({
+      cpfresp: documento
+    });
+
+    if (comprador) {
+
+      console.log(
+        "✅ Usuário encontrado em compradores:",
+        comprador.nome || comprador.nomerep || comprador.responsavel
+      );
+
+      return res.json({
+        origem: "compradores",
+        dados: comprador
+      });
+    }
+
+    // =========================
+    // 3. NÃO ENCONTRADO
+    // =========================
+    return res.status(404).json({
+      erro: "Usuário não encontrado"
+    });
+
   } catch (err) {
-    console.error("Erro ao buscar usuário por documento:", err);
-    res.status(500).json({ erro: "Erro ao buscar usuário" });
+
+    console.error(
+      "Erro ao buscar usuário por documento:",
+      err
+    );
+
+    return res.status(500).json({
+      erro: "Erro ao buscar usuário"
+    });
   }
 });
 
@@ -1318,7 +1368,7 @@ app.delete("/users/:id", async (req, res) => {
   }
 });
 
-//===========================DOCUMENTO FINAL ===========================
+/*//===========================DOCUMENTO FINAL ===========================
 app.get("/resolver-documento/:documento", async (req, res) => {
   try {
 
@@ -1400,6 +1450,150 @@ app.get("/resolver-documento/:documento", async (req, res) => {
       walletId: null,
       accountId: null,
       criarNovo: true
+    });
+
+  } catch (err) {
+
+    console.error("resolver-documento erro:", err);
+
+    return res.status(500).json({
+      erro: "erro interno"
+    });
+  }
+});*/
+
+//=========================== DOCUMENTO FINAL ===========================
+app.get("/resolver-documento/:documento", async (req, res) => {
+  try {
+
+    const documento = req.params.documento.replace(/\D/g, "");
+    const { cliente_id } = req.query;
+
+    if (!cliente_id) {
+      return res.status(400).json({ erro: "cliente_id obrigatório" });
+    }
+
+    if (!documento) {
+      return res.status(400).json({ erro: "documento inválido" });
+    }
+
+    const isCPF = documento.length === 11;
+    const isCNPJ = documento.length === 14;
+
+    // =========================================================
+    // ========================== CPF ===========================
+    // =========================================================
+    if (isCPF) {
+
+      // 1. USERS GLOBAL (sem cliente_id)
+      const user = await db.collection("users").findOne({ documento });
+
+      if (user) {
+
+        const mesmaEmpresa = user.cliente_id == cliente_id;
+
+        return res.json({
+          origem: mesmaEmpresa ? "cpf_cli" : "cpf_global",
+          data: user,
+          walletId: user.walletId || null,
+          accountId: user.accountId || null,
+          criarNovo: false
+        });
+      }
+
+      // 2. COMPRADORES (cpfresp)
+      const comprador = await db.collection("compradores").findOne({
+        cpfresp: documento
+      });
+
+      if (comprador) {
+        return res.json({
+          origem: "cpf_buyers",
+          data: comprador,
+          walletId: comprador.walletId || null,
+          accountId: comprador.accountId || null,
+          criarNovo: false
+        });
+      }
+
+      // 3. NOVO
+      return res.json({
+        origem: "novo",
+        data: null,
+        walletId: null,
+        accountId: null,
+        criarNovo: true
+      });
+    }
+
+    // =========================================================
+    // ========================== CNPJ ==========================
+    // =========================================================
+    if (isCNPJ) {
+
+      // 1. CLIENTES
+      const cliente = await db.collection("clientes").findOne({
+        documento
+      });
+
+      if (cliente) {
+        return res.json({
+          origem: "cnpj_cli",
+          data: cliente,
+          walletId: cliente.walletId || null,
+          accountId: cliente.accountId || null,
+          criarNovo: false
+        });
+      }
+
+      // 2. PROPRIETARIOS
+      const prop = await db.collection("proprietarios").findOne({
+        documento
+      });
+
+      if (prop) {
+
+        const mesmaEmpresa = prop.cliente_id == cliente_id;
+
+        return res.json({
+          origem: mesmaEmpresa ? "cnpj_prop" : "cnpj_prop_global",
+          data: prop,
+          walletId: prop.walletId || null,
+          accountId: prop.accountId || null,
+          criarNovo: false
+        });
+      }
+
+      // 3. COMPRADORES (documento)
+      const comprador = await db.collection("compradores").findOne({
+        documento
+      });
+
+      if (comprador) {
+        return res.json({
+          origem: "cnpj_buyers",
+          data: comprador,
+          walletId: comprador.walletId || null,
+          accountId: comprador.accountId || null,
+          criarNovo: false
+        });
+      }
+
+      // 4. NOVO
+      return res.json({
+        origem: "novo",
+        data: null,
+        walletId: null,
+        accountId: null,
+        criarNovo: true
+      });
+    }
+
+    // =========================================================
+    // DOCUMENTO INVÁLIDO (nem CPF nem CNPJ)
+    // =========================================================
+    return res.status(400).json({
+      erro: "Documento deve ser CPF ou CNPJ válido"
     });
 
   } catch (err) {
