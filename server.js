@@ -1606,6 +1606,150 @@ app.get("/resolver-documento/:documento", async (req, res) => {
   }
 });
 
+//=========================== DOCUMENTO FINAL (BUYERS FIRST) ===========================
+app.get("/resolver-documento-buyers-first/:documento", async (req, res) => {
+  try {
+
+    const documento = req.params.documento.replace(/\D/g, "");
+    const { cliente_id } = req.query;
+
+    if (!cliente_id) {
+      return res.status(400).json({ erro: "cliente_id obrigatório" });
+    }
+
+    if (!documento) {
+      return res.status(400).json({ erro: "documento inválido" });
+    }
+
+    const isCPF = documento.length === 11;
+    const isCNPJ = documento.length === 14;
+
+    // =========================================================
+    // ========================== CPF ===========================
+    // =========================================================
+    if (isCPF) {
+
+      // 1. COMPRADORES (cpfresp)
+      const comprador = await db.collection("compradores").findOne({
+        cpfresp: documento
+      });
+
+      if (comprador) {
+        return res.json({
+          origem: "cpf_buyers",
+          data: comprador,
+          walletId: comprador.walletId || null,
+          accountId: comprador.accountId || null,
+          criarNovo: false
+        });
+      }
+
+      // 2. USERS GLOBAL
+      const user = await db.collection("users").findOne({ documento });
+
+      if (user) {
+
+        const mesmaEmpresa = user.cliente_id == cliente_id;
+
+        return res.json({
+          origem: mesmaEmpresa ? "cpf_cli" : "cpf_global",
+          data: user,
+          walletId: user.walletId || null,
+          accountId: user.accountId || null,
+          criarNovo: false
+        });
+      }
+
+      // 3. NOVO
+      return res.json({
+        origem: "novo",
+        data: null,
+        walletId: null,
+        accountId: null,
+        criarNovo: true
+      });
+    }
+
+    // =========================================================
+    // ========================== CNPJ ==========================
+    // =========================================================
+    if (isCNPJ) {
+
+      // 1. COMPRADORES (documento)
+      const comprador = await db.collection("compradores").findOne({
+        documento
+      });
+
+      if (comprador) {
+        return res.json({
+          origem: "cnpj_buyers",
+          data: comprador,
+          walletId: comprador.walletId || null,
+          accountId: comprador.accountId || null,
+          criarNovo: false
+        });
+      }
+
+      // 2. CLIENTES
+      const cliente = await db.collection("clientes").findOne({
+        documento
+      });
+
+      if (cliente) {
+        return res.json({
+          origem: "cnpj_cli",
+          data: cliente,
+          walletId: cliente.walletId || null,
+          accountId: cliente.accountId || null,
+          criarNovo: false
+        });
+      }
+
+      // 3. PROPRIETARIOS
+      const prop = await db.collection("proprietarios").findOne({
+        documento
+      });
+
+      if (prop) {
+
+        const mesmaEmpresa = prop.cliente_id == cliente_id;
+
+        return res.json({
+          origem: mesmaEmpresa ? "cnpj_prop" : "cnpj_prop_global",
+          data: prop,
+          walletId: prop.walletId || null,
+          accountId: prop.accountId || null,
+          criarNovo: false
+        });
+      }
+
+      // 4. NOVO
+      return res.json({
+        origem: "novo",
+        data: null,
+        walletId: null,
+        accountId: null,
+        criarNovo: true
+      });
+    }
+
+    // =========================================================
+    // DOCUMENTO INVÁLIDO
+    // =========================================================
+    return res.status(400).json({
+      erro: "Documento deve ser CPF ou CNPJ válido"
+    });
+
+  } catch (err) {
+
+    console.error("resolver-documento-buyers-first erro:", err);
+
+    return res.status(500).json({
+      erro: "erro interno"
+    });
+  }
+});
+
 // ======================= PLAYERS COM SEGURANÇA =======================
 
 // GET - Listar players APENAS do cliente
