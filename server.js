@@ -1368,240 +1368,82 @@ app.delete("/users/:id", async (req, res) => {
   }
 });
 
-/*//===========================DOCUMENTO FINAL ===========================
-app.get("/resolver-documento/:documento", async (req, res) => {
+// ============================ ROUTE UPDATE ORIGEM ============================
+
+app.put("/origem/:collection/:id", async (req, res) => {
+
   try {
 
-    const documento = req.params.documento.replace(/\D/g, "");
-    const { cliente_id } = req.query;
+    const { collection, id } = req.params;
+    const { dados } = req.body;
 
-    if (!cliente_id) {
+    // =====================================================
+    // 🔥 COLLECTIONS PERMITIDAS
+    // =====================================================
+
+    const permitidas = [
+      "users",
+      "clientes",
+      "proprietarios"
+    ];
+
+    if (!permitidas.includes(collection)) {
       return res.status(400).json({
-        erro: "cliente_id obrigatório"
+        ok: false,
+        erro: "Collection inválida"
       });
     }
 
-    if (!documento) {
+    if (!id) {
       return res.status(400).json({
-        erro: "documento inválido"
+        ok: false,
+        erro: "ID obrigatório"
       });
     }
 
-    // =========================
-    // 1. COMPRADOR GLOBAL
-    // =========================
-    const comprador = await db.collection("compradores").findOne(
-      { documento },
-      { sort: { atualizadoEm: -1, createdAt: -1 } }
-    );
-
-    if (comprador) {
-      return res.json({
-        origem: "comprador",
-        data: comprador,
-        walletId: comprador.walletId || null,
-        accountId: comprador.accountId || null,
-        criarNovo: false
+    if (!dados || typeof dados !== "object") {
+      return res.status(400).json({
+        ok: false,
+        erro: "Dados inválidos"
       });
     }
 
-    // =========================
-    // 2. USER DO CLIENTE
-    // =========================
-    const user = await db.collection("users").findOne({
-      documento,
-      cliente_id
-    });
+    // =====================================================
+    // 🔥 PROTEÇÃO
+    // =====================================================
 
-    if (user) {
-      return res.json({
-        origem: "user",
-        data: user,
-        walletId: user.walletId || null,
-        accountId: user.accountId || null,
-        criarNovo: true
-      });
-    }
+    delete dados._id;
 
-    // =========================
-    // 3. PROPRIETÁRIO DO CLIENTE
-    // =========================
-    const prop = await db.collection("proprietarios").findOne({
-      documento,
-      cliente_id
-    });
+    // =====================================================
+    // 🔥 GARANTE BUYER
+    // =====================================================
 
-    if (prop) {
-      return res.json({
-        origem: "proprietario",
-        data: prop,
-        walletId: prop.walletId || null,
-        accountId: prop.accountId || null,
-        criarNovo: true
-      });
-    }
+    dados.buyer = true;
+    dados.atualizadoEm = new Date();
 
-    // =========================
-    // 4. NOVO
-    // =========================
-    return res.json({
-      origem: "novo",
-      data: null,
-      walletId: null,
-      accountId: null,
-      criarNovo: true
+    // =====================================================
+    // 🔥 UPDATE
+    // =====================================================
+
+    const resultado = await db
+      .collection(collection)
+      .updateOne(
+        { _id: id },
+        { $set: dados }
+      );
+
+    return res.status(200).json({
+      ok: true,
+      modificados: resultado.modifiedCount
     });
 
   } catch (err) {
 
-    console.error("resolver-documento erro:", err);
+    console.error(err);
 
     return res.status(500).json({
-      erro: "erro interno"
-    });
-  }
-});*/
-
-//=========================== DOCUMENTO FINAL ===========================
-app.get("/resolver-documento/:documento", async (req, res) => {
-  try {
-
-    const documento = req.params.documento.replace(/\D/g, "");
-    const { cliente_id } = req.query;
-
-    if (!cliente_id) {
-      return res.status(400).json({ erro: "cliente_id obrigatório" });
-    }
-
-    if (!documento) {
-      return res.status(400).json({ erro: "documento inválido" });
-    }
-
-    const isCPF = documento.length === 11;
-    const isCNPJ = documento.length === 14;
-
-    // =========================================================
-    // ========================== CPF ===========================
-    // =========================================================
-    if (isCPF) {
-
-      // 1. USERS GLOBAL (sem cliente_id)
-      const user = await db.collection("users").findOne({ documento });
-
-      if (user) {
-
-        const mesmaEmpresa = user.cliente_id == cliente_id;
-
-        return res.json({
-          origem: mesmaEmpresa ? "cpf_cli" : "cpf_global",
-          data: user,
-          walletId: user.walletId || null,
-          accountId: user.accountId || null,
-          criarNovo: false
-        });
-      }
-
-      // 2. COMPRADORES (cpfresp)
-      const comprador = await db.collection("compradores").findOne({
-        cpfresp: documento
-      });
-
-      if (comprador) {
-        return res.json({
-          origem: "cpf_buyers",
-          data: comprador,
-          walletId: comprador.walletId || null,
-          accountId: comprador.accountId || null,
-          criarNovo: false
-        });
-      }
-
-      // 3. NOVO
-      return res.json({
-        origem: "novo",
-        data: null,
-        walletId: null,
-        accountId: null,
-        criarNovo: true
-      });
-    }
-
-    // =========================================================
-    // ========================== CNPJ ==========================
-    // =========================================================
-    if (isCNPJ) {
-
-      // 1. CLIENTES
-      const cliente = await db.collection("clientes").findOne({
-        documento
-      });
-
-      if (cliente) {
-        return res.json({
-          origem: "cnpj_cli",
-          data: cliente,
-          walletId: cliente.walletId || null,
-          accountId: cliente.accountId || null,
-          criarNovo: false
-        });
-      }
-
-      // 2. PROPRIETARIOS
-      const prop = await db.collection("proprietarios").findOne({
-        documento
-      });
-
-      if (prop) {
-
-        const mesmaEmpresa = prop.cliente_id == cliente_id;
-
-        return res.json({
-          origem: mesmaEmpresa ? "cnpj_prop" : "cnpj_prop_global",
-          data: prop,
-          walletId: prop.walletId || null,
-          accountId: prop.accountId || null,
-          criarNovo: false
-        });
-      }
-
-      // 3. COMPRADORES (documento)
-      const comprador = await db.collection("compradores").findOne({
-        documento
-      });
-
-      if (comprador) {
-        return res.json({
-          origem: "cnpj_buyers",
-          data: comprador,
-          walletId: comprador.walletId || null,
-          accountId: comprador.accountId || null,
-          criarNovo: false
-        });
-      }
-
-      // 4. NOVO
-      return res.json({
-        origem: "novo",
-        data: null,
-        walletId: null,
-        accountId: null,
-        criarNovo: true
-      });
-    }
-
-    // =========================================================
-    // DOCUMENTO INVÁLIDO (nem CPF nem CNPJ)
-    // =========================================================
-    return res.status(400).json({
-      erro: "Documento deve ser CPF ou CNPJ válido"
-    });
-
-  } catch (err) {
-
-    console.error("resolver-documento erro:", err);
-
-    return res.status(500).json({
-      erro: "erro interno"
+      ok: false,
+      erro: "Erro interno"
     });
   }
 });
@@ -1733,6 +1575,7 @@ app.get("/resolver-documento-buyers-first/:documento", async (req, res) => {
     return res.status(500).json({ erro: "erro interno" });
   }
 });
+
 // ======================= PLAYERS COM SEGURANÇA =======================
 
 // GET - Listar players APENAS do cliente
