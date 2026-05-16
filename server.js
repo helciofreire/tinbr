@@ -699,8 +699,6 @@ app.delete("/proprietarios/:id", async (req, res) => {
   }
 });
 
-//======================== COMPRADORES ====================
-// POST - Inserir comprador
 app.post("/compradores", async (req, res) => {
 
   try {
@@ -721,16 +719,20 @@ app.post("/compradores", async (req, res) => {
       });
     }
 
-    if (!dados._id) {
-      return res.status(400).json({
-        sucesso: false,
-        erro: "_id é obrigatório"
-      });
-    }
+    // =====================================================
+    // 🔥 ID AUTOMÁTICO (CORREÇÃO CRÍTICA)
+    // =====================================================
 
-    // Verifica se já existe
+    const novoId =
+      dados._id ||
+      Date.now().toString() + Math.random().toString(36).slice(2, 8);
+
+    // =====================================================
+    // 🔥 VERIFICA DUPLICIDADE
+    // =====================================================
+
     const existente = await db.collection("compradores").findOne({
-      _id: dados._id
+      _id: novoId
     });
 
     if (existente) {
@@ -740,13 +742,19 @@ app.post("/compradores", async (req, res) => {
       });
     }
 
+    // =====================================================
+    // 🔥 INSERT FINAL
+    // =====================================================
+
     const novoComprador = {
       ...dados,
+      _id: novoId,
       criadoEm: new Date(),
       atualizadoEm: new Date()
     };
 
-    const resultado = await db.collection("compradores").insertOne(novoComprador);
+    const resultado =
+      await db.collection("compradores").insertOne(novoComprador);
 
     return res.status(201).json({
       sucesso: true,
@@ -761,9 +769,7 @@ app.post("/compradores", async (req, res) => {
       sucesso: false,
       erro: "Erro interno do servidor"
     });
-
   }
-
 });
 
 // GET - Buscar comprador por documento
