@@ -1472,17 +1472,22 @@ app.get("/resolver-documento-buyers-first/:documento", async (req, res) => {
     const isCPF = documento.length === 11;
     const isCNPJ = documento.length === 14;
 
-    const buildResponse = (origem, data, cliente_id_registro, walletId, accountId) => ({
-      origem,
-      data,
-      walletId: walletId || null,
-      accountId: accountId || null,
-      criarNovo: false,
-      cliente_id: cliente_id_registro || null,
-      mesmoCliente: cliente_id_registro
-        ? String(cliente_id_registro) === String(cliente_id)
-        : false
-    });
+    const buildResponse = (origem, data, cliente_id_registro, walletId, accountId) => {
+
+      const safeData = data ? structuredClone(data) : {};
+
+      return {
+        origem,
+        data: safeData,
+        walletId: walletId || null,
+        accountId: accountId || null,
+        criarNovo: false,
+        cliente_id: cliente_id_registro || null,
+        mesmoCliente: cliente_id_registro
+          ? String(cliente_id_registro) === String(cliente_id)
+          : false
+      };
+    };
 
     // ================= CPF =================
     if (isCPF) {
@@ -1513,7 +1518,7 @@ app.get("/resolver-documento-buyers-first/:documento", async (req, res) => {
 
       return res.json({
         origem: "novo",
-        data: null,
+        data: {},
         walletId: null,
         accountId: null,
         criarNovo: true,
@@ -1563,7 +1568,7 @@ app.get("/resolver-documento-buyers-first/:documento", async (req, res) => {
 
       return res.json({
         origem: "novo",
-        data: null,
+        data: {},
         walletId: null,
         accountId: null,
         criarNovo: true,
