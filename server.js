@@ -1472,107 +1472,218 @@ app.get("/resolver-documento-buyers-first/:documento", async (req, res) => {
     const isCPF = documento.length === 11;
     const isCNPJ = documento.length === 14;
 
-    const buildResponse = (origem, data, cliente_id_registro, walletId, accountId) => {
+    const buildResponse = (
+      origem,
+      data,
+      cliente_id_registro,
+      walletId,
+      accountId
+    ) => {
 
-      const safeData = data ? structuredClone(data) : {};
+      const safeData = data
+        ? structuredClone(data)
+        : {};
 
       return {
         origem,
         data: safeData,
         walletId: walletId || null,
         accountId: accountId || null,
+
+        // 🔥 DEFAULT
         criarNovo: false,
+
         cliente_id: cliente_id_registro || null,
+
         mesmoCliente: cliente_id_registro
           ? String(cliente_id_registro) === String(cliente_id)
           : false
       };
     };
 
-    // ================= CPF =================
+    // =====================================================================
+    // CPF
+    // =====================================================================
+
     if (isCPF) {
 
-      const comprador = await db.collection("compradores").findOne({ cpfresp: documento });
+      // ---------------------------------------------------
+      // 1) COMPRADOR
+      // ---------------------------------------------------
+
+      const comprador = await db
+        .collection("compradores")
+        .findOne({ cpfresp: documento });
 
       if (comprador) {
-        return res.json(buildResponse(
-          "cpf_buyers",
-          comprador,
-          comprador.cliente_id,
-          comprador.walletId,
-          comprador.accountId
-        ));
+
+        return res.json(
+          buildResponse(
+            "cpf_buyers",
+            comprador,
+            comprador.cliente_id,
+            comprador.walletId,
+            comprador.accountId
+          )
+        );
       }
 
-      const user = await db.collection("users").findOne({ documento });
+      // ---------------------------------------------------
+      // 2) USER
+      // ---------------------------------------------------
+
+      const user = await db
+        .collection("users")
+        .findOne({ documento });
 
       if (user) {
-        return res.json(buildResponse(
-          user.cliente_id == cliente_id ? "cpf_cli" : "cpf_global",
+
+        const resp = buildResponse(
+          user.cliente_id == cliente_id
+            ? "cpf_cli"
+            : "cpf_global",
+
           user,
+
           user.cliente_id,
+
           user.walletId,
+
           user.accountId
-        ));
+        );
+
+        // 🔥 NÃO EXISTE EM COMPRADORES
+        resp.criarNovo = true;
+
+        return res.json(resp);
       }
 
+      // ---------------------------------------------------
+      // 3) NOVO
+      // ---------------------------------------------------
+
       return res.json({
+
         origem: "novo",
+
         data: {},
+
         walletId: null,
+
         accountId: null,
+
         criarNovo: true,
+
         cliente_id: null,
+
         mesmoCliente: false
       });
     }
 
-    // ================= CNPJ =================
+    // =====================================================================
+    // CNPJ
+    // =====================================================================
+
     if (isCNPJ) {
 
-      const comprador = await db.collection("compradores").findOne({ documento });
+      // ---------------------------------------------------
+      // 1) COMPRADOR
+      // ---------------------------------------------------
+
+      const comprador = await db
+        .collection("compradores")
+        .findOne({ documento });
 
       if (comprador) {
-        return res.json(buildResponse(
-          "cnpj_buyers",
-          comprador,
-          comprador.cliente_id,
-          comprador.walletId,
-          comprador.accountId
-        ));
+
+        return res.json(
+          buildResponse(
+            "cnpj_buyers",
+            comprador,
+            comprador.cliente_id,
+            comprador.walletId,
+            comprador.accountId
+          )
+        );
       }
 
-      const cliente = await db.collection("clientes").findOne({ documento });
+      // ---------------------------------------------------
+      // 2) CLIENTE
+      // ---------------------------------------------------
+
+      const cliente = await db
+        .collection("clientes")
+        .findOne({ documento });
 
       if (cliente) {
-        return res.json(buildResponse(
+
+        const resp = buildResponse(
           "cnpj_cli",
+
           cliente,
+
           cliente.cliente_id,
+
           cliente.walletId,
+
           cliente.accountId
-        ));
+        );
+
+        // 🔥 NÃO EXISTE EM COMPRADORES
+        resp.criarNovo = true;
+
+        return res.json(resp);
       }
 
-      const prop = await db.collection("proprietarios").findOne({ documento });
+      // ---------------------------------------------------
+      // 3) PROPRIETÁRIO
+      // ---------------------------------------------------
+
+      const prop = await db
+        .collection("proprietarios")
+        .findOne({ documento });
 
       if (prop) {
-        return res.json(buildResponse(
-          prop.cliente_id == cliente_id ? "cnpj_prop" : "cnpj_prop_global",
+
+        const resp = buildResponse(
+
+          prop.cliente_id == cliente_id
+            ? "cnpj_prop"
+            : "cnpj_prop_global",
+
           prop,
+
           prop.cliente_id,
+
           prop.walletId,
+
           prop.accountId
-        ));
+        );
+
+        // 🔥 NÃO EXISTE EM COMPRADORES
+        resp.criarNovo = true;
+
+        return res.json(resp);
       }
 
+      // ---------------------------------------------------
+      // 4) NOVO
+      // ---------------------------------------------------
+
       return res.json({
+
         origem: "novo",
+
         data: {},
+
         walletId: null,
+
         accountId: null,
+
         criarNovo: true,
+
         cliente_id: null,
+
         mesmoCliente: false
       });
     }
@@ -1582,8 +1693,15 @@ app.get("/resolver-documento-buyers-first/:documento", async (req, res) => {
     });
 
   } catch (err) {
-    console.error("resolver-documento-buyers-first erro:", err);
-    return res.status(500).json({ erro: "erro interno" });
+
+    console.error(
+      "resolver-documento-buyers-first erro:",
+      err
+    );
+
+    return res.status(500).json({
+      erro: "erro interno"
+    });
   }
 });
 
