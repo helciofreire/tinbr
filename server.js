@@ -1285,63 +1285,162 @@ app.post("/users", async (req, res) => {
 // PUT - Atualizar usuário COM verificação de cliente
 app.put("/users/:id", async (req, res) => {
   try {
+
     const id = req.params.id;
     const dados = req.body;
     const { cliente_id } = req.query;
-    
+
+    console.log("======================================");
+    console.log("🚀 PUT /users/:id");
+    console.log("🆔 id:", id);
+    console.log("🏢 cliente_id:", cliente_id);
+    console.log("📦 body recebido:", JSON.stringify(dados, null, 2));
+    console.log("======================================");
+
     if (!cliente_id) {
-      return res.status(400).json({ erro: "cliente_id é obrigatório na query" });
+      return res.status(400).json({
+        erro: "cliente_id é obrigatório na query"
+      });
     }
-    
+
     // ✅ Remove campos protegidos
-    const { _id, cliente_id: bodyClienteId, criadoEm, ...camposParaAtualizar } = dados;
-    
+    const {
+      _id,
+      cliente_id: bodyClienteId,
+      criadoEm,
+      ...camposParaAtualizar
+    } = dados;
+
     camposParaAtualizar.atualizadoEm = new Date();
-    
-    // ✅ Verifica duplicidade de email/documento (se for atualizar)
+
+    console.log("📦 camposParaAtualizar:");
+    console.log(JSON.stringify(camposParaAtualizar, null, 2));
+
+    // =====================================================
+    // EMAIL
+    // =====================================================
+
     if (camposParaAtualizar.email) {
-      const emailExistente = await db.collection("users").findOne({
-        email: camposParaAtualizar.email,
-        cliente_id: cliente_id,
-        _id: { $ne: id } // Exclui o próprio usuário
-      });
-      
+
+      const emailExistente =
+        await db.collection("users").findOne({
+          email: camposParaAtualizar.email,
+          cliente_id,
+          _id: { $ne: id }
+        });
+
+      console.log(
+        "📧 emailExistente:",
+        emailExistente?._id || null
+      );
+
       if (emailExistente) {
-        return res.status(400).json({ erro: "Email já existe neste cliente" });
+        return res.status(400).json({
+          erro: "Email já existe neste cliente"
+        });
       }
     }
-    
+
+    // =====================================================
+    // DOCUMENTO
+    // =====================================================
+
     if (camposParaAtualizar.documento) {
-      const docExistente = await db.collection("users").findOne({
-        documento: camposParaAtualizar.documento,
-        cliente_id: cliente_id,
-        _id: { $ne: id }
-      });
-      
+
+      const docExistente =
+        await db.collection("users").findOne({
+          documento: camposParaAtualizar.documento,
+          cliente_id,
+          _id: { $ne: id }
+        });
+
+      console.log(
+        "📄 docExistente:",
+        docExistente?._id || null
+      );
+
       if (docExistente) {
-        return res.status(400).json({ erro: "Documento já existe neste cliente" });
+        return res.status(400).json({
+          erro: "Documento já existe neste cliente"
+        });
       }
     }
-    
-    const resultado = await db.collection("users").updateOne(
-      { 
+
+    // =====================================================
+    // USUÁRIO ANTES
+    // =====================================================
+
+    const usuarioAntes =
+      await db.collection("users").findOne({
         _id: id,
-        cliente_id: cliente_id // ✅ Só atualiza se pertencer ao cliente
-      },
-      { $set: camposParaAtualizar }
+        cliente_id
+      });
+
+    console.log(
+      "👤 usuarioAntes:",
+      usuarioAntes
+        ? JSON.stringify(usuarioAntes, null, 2)
+        : null
     );
-    
+
+    // =====================================================
+    // UPDATE
+    // =====================================================
+
+    const resultado =
+      await db.collection("users").updateOne(
+        {
+          _id: id,
+          cliente_id
+        },
+        {
+          $set: camposParaAtualizar
+        }
+      );
+
+    console.log("📊 matchedCount:", resultado.matchedCount);
+    console.log("📊 modifiedCount:", resultado.modifiedCount);
+
     if (resultado.matchedCount === 0) {
-      return res.status(404).json({ erro: "Usuário não encontrado" });
+
+      console.log(
+        "❌ Usuário não encontrado para atualização"
+      );
+
+      return res.status(404).json({
+        erro: "Usuário não encontrado"
+      });
     }
-    
-    res.json({ 
-      sucesso: true, 
+
+    // =====================================================
+    // USUÁRIO DEPOIS
+    // =====================================================
+
+    const usuarioDepois =
+      await db.collection("users").findOne({
+        _id: id,
+        cliente_id
+      });
+
+    console.log(
+      "👤 usuarioDepois:",
+      usuarioDepois
+        ? JSON.stringify(usuarioDepois, null, 2)
+        : null
+    );
+
+    res.json({
+      sucesso: true,
       mensagem: "Usuário atualizado com sucesso"
     });
-    
+
   } catch (err) {
-    res.status(500).json({ erro: "Erro ao atualizar usuário" });
+
+    console.error("💥 ERRO PUT USER:", err);
+
+    res.status(500).json({
+      erro: "Erro ao atualizar usuário"
+    });
   }
 });
 
