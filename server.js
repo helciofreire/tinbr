@@ -161,6 +161,31 @@ app.get("/proprietarios", async (req, res) => {
   }
 });
 
+//GET proprietarios v2
+app.get("/api-v2/proprietarios/:documento", async (req, res) => {
+
+    try {
+
+        const documento = req.params.documento.replace(/\D/g, "");
+        const { cliente_id } = req.query;
+
+        const prop = await db.collection("proprietarios").findOne({
+            documento,
+            cliente_id
+        });
+
+        return res.json({
+            found: !!prop,
+            source: "proprietario_local",
+            data: prop || null
+        });
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ found: false });
+    }
+});
+
 // GET - Buscar proprietário por documento COM verificação de cliente
 app.get("/proprietarios/documento/:documento", async (req, res) => {
   try {
@@ -772,6 +797,33 @@ app.post("/compradores", async (req, res) => {
   }
 });
 
+//GET - Buscar comprador por documento v2
+app.get("/api-v2/compradores/:documento", async (req, res) => {
+
+    try {
+
+        const documento = req.params.documento.replace(/\D/g, "");
+
+        const doc = await db.collection("compradores").findOne({
+            documento
+        });
+
+        if (!doc) {
+            return res.status(404).json({ found: false });
+        }
+
+        return res.json({
+            found: true,
+            source: "comprador_local",
+            data: doc
+        });
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ found: false });
+    }
+});
+
 // GET - Buscar comprador por documento
 app.get("/compradores/por-documento/:documento", async (req, res) => {
   try {
@@ -865,6 +917,29 @@ app.put("/compradores/:id", async (req, res) => {
 });
 
 // ======================= CLIENTES =======================
+
+//GET clientes v2
+app.get("/api-v2/clientes/:documento", async (req, res) => {
+
+    try {
+
+        const documento = req.params.documento.replace(/\D/g, "");
+
+        const cliente = await db.collection("clientes").findOne({
+            documento
+        });
+
+        return res.json({
+            found: !!cliente,
+            source: "cliente_plataforma",
+            data: cliente || null
+        });
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ found: false });
+    }
+});
 
 //=========== GET - Buscar cliente por documento ===========
 app.get("/clientes/por-documento/:doc", async (req, res) => {
@@ -1014,6 +1089,47 @@ app.get("/users/email/:email", async (req, res) => {
     } catch (err) {
         console.error("Erro ao buscar usuário por email:", err);
         res.status(500).json({ erro: "Erro ao buscar usuário" });
+    }
+});
+
+//GET - Users v2
+app.get("/api-v2/users/:documento", async (req, res) => {
+
+    try {
+
+        const documento = req.params.documento.replace(/\D/g, "");
+        const { cliente_id } = req.query;
+
+        const user = await db.collection("users").findOne({
+            documento,
+            cliente_id
+        });
+
+        if (user) {
+            return res.json({
+                found: true,
+                source: "user_local",
+                data: user
+            });
+        }
+
+        const comprador = await db.collection("compradores").findOne({
+            cpfresp: documento
+        });
+
+        if (comprador) {
+            return res.json({
+                found: true,
+                source: "comprador_fallback",
+                data: comprador
+            });
+        }
+
+        return res.status(404).json({ found: false });
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ found: false });
     }
 });
 
