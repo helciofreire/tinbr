@@ -809,7 +809,11 @@ app.get("/api-v2/compradores/:documento", async (req, res) => {
         });
 
         if (!doc) {
-            return res.status(404).json({ found: false });
+            return res.json({
+                found: false,
+                source: "comprador_local",
+                data: null
+            });
         }
 
         return res.json({
@@ -820,7 +824,13 @@ app.get("/api-v2/compradores/:documento", async (req, res) => {
 
     } catch (err) {
         console.error(err);
-        res.status(500).json({ found: false });
+
+        return res.json({
+            found: false,
+            source: "comprador_local",
+            data: null,
+            error: true
+        });
     }
 });
 
