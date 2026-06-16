@@ -161,6 +161,44 @@ app.get("/proprietarios", async (req, res) => {
   }
 });
 
+// GET proprietarios local v2
+app.get("/api-v2/proprietarios-local/:documento", async (req, res) => {
+
+    try {
+
+        const documento =
+            req.params.documento.replace(/\D/g, "");
+
+        const { cliente_id } = req.query;
+
+        const prop =
+            await db.collection("proprietarios").findOne({
+                documento,
+                cliente_id
+            });
+
+        if (!prop) {
+            return res.json({
+                found: false
+            });
+        }
+
+        return res.json({
+            found: true,
+            source: "proprietario_local",
+            data: prop
+        });
+
+    } catch (err) {
+
+        console.error(err);
+
+        res.status(500).json({
+            found: false
+        });
+    }
+});
+
 //GET proprietarios v2
 app.get("/api-v2/proprietarios/:documento", async (req, res) => {
 
@@ -797,6 +835,87 @@ app.post("/compradores", async (req, res) => {
   }
 });
 
+// GET - comprador local v2
+app.get("/api-v2/compradores-local/:documento", async (req, res) => {
+
+    try {
+
+        const documento =
+            req.params.documento.replace(/\D/g, "");
+
+        const { cliente_id } = req.query;
+
+        const comprador =
+            await db.collection("compradores").findOne({
+                documento,
+                cliente_id
+            });
+
+        if (!comprador) {
+            return res.json({
+                found: false
+            });
+        }
+
+        return res.json({
+            found: true,
+            source: "comprador_local",
+            data: comprador
+        });
+
+    } catch (err) {
+
+        console.error(err);
+
+        return res.status(500).json({
+            found: false
+        });
+    }
+});
+
+// GET - comprador plataforma v2
+app.get("/api-v2/compradores-plataforma/:documento", async (req, res) => {
+
+    try {
+
+        const documento =
+            req.params.documento.replace(/\D/g, "");
+
+        const { cliente_id } = req.query;
+
+        const comprador =
+            await db.collection("compradores").findOne({
+                documento,
+                cliente_id: {
+                    $ne: cliente_id
+                }
+            });
+
+        if (!comprador) {
+
+            return res.json({
+                found: false
+            });
+        }
+
+        return res.json({
+            found: true,
+            source: "comprador_plataforma",
+            data: comprador
+        });
+
+    } catch (err) {
+
+        console.error(err);
+
+        return res.status(500).json({
+            found: false
+        });
+    }
+});
+
+
+
 //GET - Buscar comprador por documento v2
 app.get("/api-v2/compradores/:documento", async (req, res) => {
 
@@ -927,6 +1046,85 @@ app.put("/compradores/:id", async (req, res) => {
 });
 
 // ======================= CLIENTES =======================
+
+// GET clientes plataforma v2
+app.get("/api-v2/clientes-plataforma/:documento", async (req, res) => {
+
+    try {
+
+        const documento =
+            req.params.documento.replace(/\D/g, "");
+
+        const { cliente_id } = req.query;
+
+        const cliente =
+            await db.collection("clientes").findOne({
+                documento,
+                _id: { $ne: cliente_id }
+            });
+
+        if (!cliente) {
+
+            return res.json({
+                found: false
+            });
+        }
+
+        return res.json({
+            found: true,
+            source: "cliente_plataforma",
+            data: cliente
+        });
+
+    } catch (err) {
+
+        console.error(err);
+
+        res.status(500).json({
+            found: false
+        });
+    }
+});
+
+
+
+// GET clientes-local v2
+app.get("/api-v2/clientes-local/:documento", async (req, res) => {
+
+    try {
+
+        const documento =
+            req.params.documento.replace(/\D/g, "");
+
+        const { cliente_id } = req.query;
+
+        const cliente =
+            await db.collection("clientes").findOne({
+                documento,
+                _id: cliente_id
+            });
+
+        if (!cliente) {
+            return res.json({
+                found: false
+            });
+        }
+
+        return res.json({
+            found: true,
+            source: "cliente_local",
+            data: cliente
+        });
+
+    } catch (err) {
+
+        console.error(err);
+
+        res.status(500).json({
+            found: false
+        });
+    }
+});
 
 //GET clientes v2
 app.get("/api-v2/clientes/:documento", async (req, res) => {
@@ -1107,15 +1305,19 @@ app.get("/api-v2/users/:documento", async (req, res) => {
 
     try {
 
-        const documento = req.params.documento.replace(/\D/g, "");
+        const documento =
+            req.params.documento.replace(/\D/g, "");
+
         const { cliente_id } = req.query;
 
-        const user = await db.collection("users").findOne({
-            documento,
-            cliente_id
-        });
+        const user =
+            await db.collection("users").findOne({
+                documento,
+                cliente_id
+            });
 
         if (user) {
+
             return res.json({
                 found: true,
                 source: "user_local",
@@ -1123,23 +1325,21 @@ app.get("/api-v2/users/:documento", async (req, res) => {
             });
         }
 
-        const comprador = await db.collection("compradores").findOne({
-            cpfresp: documento
+        return res.status(404).json({
+            found: false,
+            source: "user_local",
+            data: null
         });
 
-        if (comprador) {
-            return res.json({
-                found: true,
-                source: "comprador_fallback",
-                data: comprador
-            });
-        }
-
-        return res.status(404).json({ found: false });
-
     } catch (err) {
+
         console.error(err);
-        res.status(500).json({ found: false });
+
+        res.status(500).json({
+            found: false,
+            source: "user_local",
+            data: null
+        });
     }
 });
 
