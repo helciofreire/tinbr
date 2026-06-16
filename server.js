@@ -1300,24 +1300,177 @@ app.get("/users/email/:email", async (req, res) => {
     }
 });
 
-//GET - Users v2
+// PUT SYNC USERS V2
+app.put("/api-v2/users/sync", async (req, res) => {
+
+    try {
+
+        const {
+            documento,
+            cliente_id,
+            nome,
+            email,
+            birthdate,
+            cep,
+            logradouro,
+            numero,
+            complemento,
+            bairro,
+            municipio,
+            uf,
+            fone1,
+            fone2,
+            walletid,
+            accountid
+        } = req.body;
+
+        const doc = (documento || "").replace(/\D/g, "");
+
+        if (!doc || !cliente_id) {
+            return res.status(400).json({
+                ok: false,
+                error: "missing_data"
+            });
+        }
+
+        // =========================
+        // 🔵 1. BUSCA SEGURA
+        // =========================
+        const user = await db.collection("users").findOne({
+            documento: doc,
+            cliente_id
+        });
+
+        // =========================
+        // 🔵 2. SE EXISTE → UPDATE SE NECESSÁRIO
+        // =========================
+        if (user) {
+
+            const precisaUpdate =
+                user.comprador !== true;
+
+            if (precisaUpdate) {
+
+                await db.collection("users").updateOne(
+                    { _id: user._id },
+                    {
+                        $set: {
+                            comprador: true,
+                            nivel: user.nivel ?? 7,
+
+                            nome: nome ?? user.nome,
+                            email: email ?? user.email,
+                            birthdate: birthdate ?? user.birthdate,
+
+                            cep: cep ?? user.cep,
+                            logradouro: logradouro ?? user.logradouro,
+                            numero: numero ?? user.numero,
+                            complemento: complemento ?? user.complemento,
+                            bairro: bairro ?? user.bairro,
+                            municipio: municipio ?? user.municipio,
+                            uf: uf ?? user.uf,
+
+                            fone1: fone1 ?? user.fone1,
+                            fone2: fone2 ?? user.fone2,
+
+                            walletid: walletid ?? user.walletid,
+                            accountid: accountid ?? user.accountid,
+
+                            atualizadoEm: new Date()
+                        }
+                    }
+                );
+
+                return res.json({
+                    ok: true,
+                    action: "updated",
+                    id: user._id
+                });
+            }
+
+            return res.json({
+                ok: true,
+                action: "no_change",
+                id: user._id
+            });
+        }
+
+        // =========================
+        // 🔵 3. NÃO EXISTE → INSERE
+        // =========================
+        const newUser = {
+            _id: await gerarId(),
+            documento: doc,
+            cliente_id,
+
+            nome,
+            email,
+            birthdate,
+
+            cep,
+            logradouro,
+            numero,
+            complemento,
+            bairro,
+            municipio,
+            uf,
+
+            fone1,
+            fone2,
+
+            walletid,
+            accountid,
+
+            comprador: true,
+            nivel: 7,
+
+            criadoEm: new Date(),
+            atualizadoEm: new Date()
+        };
+
+        await db.collection("users").insertOne(newUser);
+
+        return res.json({
+            ok: true,
+            action: "inserted",
+            id: newUser._id
+        });
+
+    } catch (err) {
+        console.error("💥 users/sync:", err);
+
+        return res.status(500).json({
+            ok: false,
+            error: "internal_error"
+        });
+    }
+});
+
+
+// GET - Users v2 (FINAL CORRIGIDO)
 app.get("/api-v2/users/:documento", async (req, res) => {
 
     try {
 
-        const documento =
-            req.params.documento.replace(/\D/g, "");
-
+        const documento = req.params.documento.replace(/\D/g, "");
         const { cliente_id } = req.query;
 
-        const user =
-            await db.collection("users").findOne({
-                documento,
-                cliente_id
+        if (!cliente_id) {
+            return res.status(400).json({
+                found: false,
+                source: "missing_cliente_id"
             });
+        }
+
+        // =====================================================
+        // 🔵 1. USERS (fonte oficial, SEMPRE prioridade máxima)
+        // =====================================================
+        const user = await db.collection("users").findOne({
+            documento,
+            cliente_id
+        });
 
         if (user) {
-
             return res.json({
                 found: true,
                 source: "user_local",
@@ -1325,20 +1478,33 @@ app.get("/api-v2/users/:documento", async (req, res) => {
             });
         }
 
+        // =====================================================
+        // 🔵 2. COMPRADORES (fallback controlado E ISOLADO)
+        // =====================================================
+        const comprador = await db.collection("compradores").findOne({
+            documento,
+            cliente_id
+        });
+
+        if (comprador) {
+            return res.json({
+                found: true,
+                source: "comprador_fallback",
+                data: comprador
+            });
+        }
+
         return res.status(404).json({
             found: false,
-            source: "user_local",
-            data: null
+            source: "none"
         });
 
     } catch (err) {
-
         console.error(err);
 
-        res.status(500).json({
+        return res.status(500).json({
             found: false,
-            source: "user_local",
-            data: null
+            source: "error"
         });
     }
 });
