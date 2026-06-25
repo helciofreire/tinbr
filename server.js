@@ -2045,6 +2045,38 @@ app.put("/origem/:collection/:id", async (req, res) => {
   }
 });
 
+// ===============================
+// PROPRIETÁRIO PLATAFORMA (SEM CLIENTE)
+// ===============================
+app.get("/proprietarios/plataforma/:documento", async (req, res) => {
+
+  try {
+
+    const documento = req.params.documento.replace(/\D/g, "");
+
+    if (!documento) {
+      return res.status(400).json({ erro: "documento inválido" });
+    }
+
+    const prop = await db.collection("proprietarios").findOne({
+      documento
+    });
+
+    if (!prop) {
+      return res.status(404).json({ erro: "não encontrado" });
+    }
+
+    return res.json(prop);
+
+  } catch (err) {
+
+    console.error("proprietarios/plataforma erro:", err);
+
+    return res.status(500).json({ erro: "erro interno" });
+  }
+});
+
+
 //=========================== DOCUMENTO FINAL (BUYERS FIRST) ===========================
 app.get("/resolver-documento-buyers-first/:documento", async (req, res) => {
   try {
