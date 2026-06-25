@@ -2146,17 +2146,23 @@ app.get("/resolver-documento-buyers-first/:documento", async (req, res) => {
 
       const comprador = await db.collection("compradores").findOne({ documento });
 
-      if (comprador) {
-        return res.json(
-          buildResponse(
-            "cnpj_buyers",
-            comprador,
-            comprador.cliente_id,
-            comprador.walletId,
-            comprador.accountId
-          )
-        );
-      }
+if (comprador) {
+
+  const origem =
+    comprador.cliente_id === cliente_id
+      ? "cnpj_buyers"
+      : "cnpj_other_client";
+
+  return res.json(
+    buildResponse(
+      origem,
+      comprador,
+      comprador.cliente_id,
+      comprador.walletId,
+      comprador.accountId
+    )
+  );
+}
 
       // ---------------------------------------------------
       // 2) CLIENTE EXISTE → CRIA COMPRADOR
