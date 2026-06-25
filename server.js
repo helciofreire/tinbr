@@ -2087,9 +2087,8 @@ app.get("/resolver-documento-buyers-first/:documento", async (req, res) => {
     };
 
     // =====================================================================
-    // CPF (NÃO MEXIDO)
+    // CPF (SEM ALTERAÇÃO)
     // =====================================================================
-
     if (isCPF) {
 
       const comprador = await db.collection("compradores").findOne({ cpfresp: documento });
@@ -2135,39 +2134,53 @@ app.get("/resolver-documento-buyers-first/:documento", async (req, res) => {
     }
 
     // =====================================================================
-    // CNPJ (CORRIGIDO COM SUA REGRA)
+    // CNPJ (CORRIGIDO)
     // =====================================================================
-
     if (isCNPJ) {
 
-      // ---------------------------------------------------
-      // 1) COMPRADOR EXISTE
-      // ---------------------------------------------------
+      // =====================================================
+      // 🔴 1) COMPRADORES DO MESMO CLIENTE
+      // =====================================================
+      const compradorLocal = await db.collection("compradores").findOne({
+        documento,
+        cliente_id
+      });
 
-      const comprador = await db.collection("compradores").findOne({ documento });
+      if (compradorLocal) {
+        return res.json(
+          buildResponse(
+            "cnpj_buyers",
+            compradorLocal,
+            compradorLocal.cliente_id,
+            compradorLocal.walletId,
+            compradorLocal.accountId
+          )
+        );
+      }
 
-if (comprador) {
+      // =====================================================
+      // 🔴 2) PROPRIETÁRIOS DO MESMO CLIENTE
+      // =====================================================
+      const propLocal = await db.collection("proprietarios").findOne({
+        documento,
+        cliente_id
+      });
 
-  const origem =
-    comprador.cliente_id === cliente_id
-      ? "cnpj_buyers"
-      : "cnpj_other_client";
+      if (propLocal) {
+        return res.json(
+          buildResponse(
+            "cnpj_prop",
+            propLocal,
+            propLocal.cliente_id,
+            propLocal.walletId,
+            propLocal.accountId
+          )
+        );
+      }
 
-  return res.json(
-    buildResponse(
-      origem,
-      comprador,
-      comprador.cliente_id,
-      comprador.walletId,
-      comprador.accountId
-    )
-  );
-}
-
-      // ---------------------------------------------------
-      // 2) CLIENTE EXISTE → CRIA COMPRADOR
-      // ---------------------------------------------------
-
+      // =====================================================
+      // 🟡 3) CLIENTES (OUTRAS IMOBILIÁRIAS)
+      // =====================================================
       const cliente = await db.collection("clientes").findOne({ documento });
 
       if (cliente) {
@@ -2214,63 +2227,60 @@ if (comprador) {
         );
       }
 
-      // ---------------------------------------------------
-      // 3) PROPRIETÁRIO EXISTE → CRIA COMPRADOR
-      // ---------------------------------------------------
+      // =====================================================
+      // 🟡 4) COMPRADORES GLOBAIS (OUTROS CLIENTES)
+      // =====================================================
+      const compradorGlobal = await db.collection("compradores").findOne({ documento });
 
-      const prop = await db.collection("proprietarios").findOne({ documento });
+      if (compradorGlobal) {
 
-      if (prop) {
-
-        const novoComprador = {
-          _id: gerarId(),
-          cliente_id,
-          documento,
-
-          razao: prop.razao || "",
-          email: prop.email || "",
-          fone1: prop.fone1 || "",
-          fone2: prop.fone2 || "",
-
-          cep: prop.cep || "",
-          logradouro: prop.logradouro || "",
-          numero: prop.numero || "",
-          complemento: prop.complemento || "",
-          bairro: prop.bairro || "",
-          municipio: prop.municipio || "",
-          uf: prop.uf || "",
-
-          responsavel: prop.responsavel || "",
-          cpfresp: prop.cpfresp || "",
-          emailresp: prop.emailresp || "",
-          funcao: prop.funcao || "",
-
-          walletId: prop.walletId || null,
-          accountId: prop.accountId || null,
-
-          tipo: "auto_from_prop"
-        };
-
-        await db.collection("compradores").insertOne(novoComprador);
+        const origem =
+          compradorGlobal.cliente_id === cliente_id
+            ? "cnpj_buyers"
+            : "cnpj_other_client";
 
         return res.json(
           buildResponse(
-            "cnpj_prop",
-            novoComprador,
-            prop.cliente_id,
-            prop.walletId,
-            prop.accountId
+            origem,
+            compradorGlobal,
+            compradorGlobal.cliente_id,
+            compradorGlobal.walletId,
+            compradorGlobal.accountId
           )
         );
       }
 
-      // ---------------------------------------------------
-      // 4) NOVO
-      // ---------------------------------------------------
+      // =====================================================
+      // 🟡 5) PROPRIETÁRIOS GLOBAIS (OUTROS CLIENTES)
+      // =====================================================
+      const propGlobal = await db.collection("proprietarios").findOne({ documento });
+
+      if (propGlobal) {
+
+        const origem =
+          propGlobal.cliente_id === cliente_id
+            ? "cnpj_prop"
+            : "cnpj_prop_other_client";
+
+        return res.json(
+          buildResponse(
+            origem,
+            propGlobal,
+            propGlobal.cliente_id,
+            propGlobal.walletId,
+            propGlobal.accountId
+          )
+        );
+      }
+
+      // =====================================================
+      // 🔵 6) SÓ AQUI CHAMA API EXTERNA
+      // =====================================================
+      const externo = await buscarCnpj(documento);
 
       return res.json({
-        origem: "novo",
-        data: {},
+        origem: "buscarCnpj",
+        data: externo,
         walletId: null,
         accountId: null,
         criarNovo: true,
