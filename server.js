@@ -2119,41 +2119,64 @@ app.get("/resolver-documento-buyers-first/:documento", async (req, res) => {
     };
 
     // =====================================================================
-    // CPF (SEM ALTERAÇÃO)
+    // CPF (CORRIGIDO)
     // =====================================================================
     if (isCPF) {
 
-      const comprador = await db.collection("compradores").findOne({ cpfresp: documento });
+      // 1) COMPRADORES DO CLIENTE (POR documento)
+      const compradorLocal = await db.collection("compradores").findOne({
+        documento,
+        cliente_id
+      });
 
-      if (comprador) {
+      if (compradorLocal) {
         return res.json(
           buildResponse(
             "cpf_buyers",
-            comprador,
-            comprador.cliente_id,
-            comprador.walletId,
-            comprador.accountId
+            compradorLocal,
+            compradorLocal.cliente_id,
+            compradorLocal.walletId,
+            compradorLocal.accountId
           )
         );
       }
 
-      const user = await db.collection("users").findOne({ documento });
+      // 2) USERS DO CLIENTE (POR documento)
+      const userLocal = await db.collection("users").findOne({
+        documento,
+        cliente_id
+      });
 
-      if (user) {
-
-        const resp = buildResponse(
-          user.cliente_id == cliente_id ? "cpf_cli" : "cpf_global",
-          user,
-          user.cliente_id,
-          user.walletId,
-          user.accountId
+      if (userLocal) {
+        return res.json(
+          buildResponse(
+            "cpf_cli",
+            userLocal,
+            userLocal.cliente_id,
+            userLocal.walletId,
+            userLocal.accountId
+          )
         );
-
-        resp.criarNovo = true;
-
-        return res.json(resp);
       }
 
+      // 3) USERS DA PLATAFORMA (QUALQUER CLIENTE)
+      const userGlobal = await db.collection("users").findOne({
+        documento
+      });
+
+      if (userGlobal) {
+        return res.json(
+          buildResponse(
+            "cpf_global",
+            userGlobal,
+            userGlobal.cliente_id,
+            userGlobal.walletId,
+            userGlobal.accountId
+          )
+        );
+      }
+
+      // 4) NOVO (BIGCPF)
       return res.json({
         origem: "novo",
         data: {},
@@ -2166,13 +2189,10 @@ app.get("/resolver-documento-buyers-first/:documento", async (req, res) => {
     }
 
     // =====================================================================
-    // CNPJ (CORRIGIDO)
+    // CNPJ (SEM ALTERAÇÃO)
     // =====================================================================
     if (isCNPJ) {
 
-      // =====================================================
-      // 🔴 1) COMPRADORES DO MESMO CLIENTE
-      // =====================================================
       const compradorLocal = await db.collection("compradores").findOne({
         documento,
         cliente_id
@@ -2190,9 +2210,6 @@ app.get("/resolver-documento-buyers-first/:documento", async (req, res) => {
         );
       }
 
-      // =====================================================
-      // 🔴 2) PROPRIETÁRIOS DO MESMO CLIENTE
-      // =====================================================
       const propLocal = await db.collection("proprietarios").findOne({
         documento,
         cliente_id
@@ -2210,9 +2227,6 @@ app.get("/resolver-documento-buyers-first/:documento", async (req, res) => {
         );
       }
 
-      // =====================================================
-      // 🟡 3) CLIENTES (OUTRAS IMOBILIÁRIAS)
-      // =====================================================
       const cliente = await db.collection("clientes").findOne({ documento });
 
       if (cliente) {
@@ -2259,9 +2273,6 @@ app.get("/resolver-documento-buyers-first/:documento", async (req, res) => {
         );
       }
 
-      // =====================================================
-      // 🟡 4) COMPRADORES GLOBAIS (OUTROS CLIENTES)
-      // =====================================================
       const compradorGlobal = await db.collection("compradores").findOne({ documento });
 
       if (compradorGlobal) {
@@ -2282,9 +2293,6 @@ app.get("/resolver-documento-buyers-first/:documento", async (req, res) => {
         );
       }
 
-      // =====================================================
-      // 🟡 5) PROPRIETÁRIOS GLOBAIS (OUTROS CLIENTES)
-      // =====================================================
       const propGlobal = await db.collection("proprietarios").findOne({ documento });
 
       if (propGlobal) {
@@ -2305,9 +2313,6 @@ app.get("/resolver-documento-buyers-first/:documento", async (req, res) => {
         );
       }
 
-      // =====================================================
-      // 🔵 6) SÓ AQUI CHAMA API EXTERNA
-      // =====================================================
       const externo = await buscarCnpj(documento);
 
       return res.json({
