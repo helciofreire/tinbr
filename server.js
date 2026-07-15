@@ -1303,12 +1303,11 @@ app.get("/users/email/:email", async (req, res) => {
 // PUT SYNC USERS V2
 app.put("/api-v2/users/sync", async (req, res) => {
 
-    console.log("================================");
-    console.log("🔵 USERS SYNC V2");
-    console.log("BODY:", req.body);
-    console.log("================================");
-
     try {
+
+        console.log("🔵 USERS SYNC V2 INICIO");
+        console.log("PAYLOAD:", req.body);
+
 
         const {
             documento,
@@ -1330,15 +1329,7 @@ app.put("/api-v2/users/sync", async (req, res) => {
         } = req.body;
 
 
-        const doc = (documento || "")
-            .replace(/\D/g, "");
-
-
-        console.log("📌 documento limpo:", doc);
-        console.log("📌 cliente_id:", cliente_id);
-
-
-        if (!doc || !cliente_id) {
+        if (!documento || !cliente_id) {
 
             console.log("⛔ dados obrigatórios ausentes");
 
@@ -1349,54 +1340,86 @@ app.put("/api-v2/users/sync", async (req, res) => {
         }
 
 
-        console.log("🔎 procurando user");
+        // CPF ou CNPJ alfanumérico
+        const doc = String(documento)
+    .replace(/[^a-zA-Z0-9]/g, "")
+    .toUpperCase();
+
+	console.log("🔎 SYNC BUSCA USER");
+	console.log({
+    	documentoRecebido: documento,
+    	documentoTratado: doc,
+    	cliente_id
+});
 
 
-        const user =
-            await db.collection("users").findOne({
-                documento: doc,
-                cliente_id
-            });
+const user = await db.collection("users").findOne({
+    documento: doc,
+    cliente_id
+});
 
 
-        console.log("👤 user encontrado:", !!user);
+console.log("🔎 RESULTADO FIND USER:", user);
 
 
-
-        // ======================================
-        // USER EXISTENTE
-        // ======================================
-        if (user) {
-
-
-            console.log("♻️ atualizando user");
+        // ===============================
+        // EXISTE
+        // ===============================
+        if(user){
 
 
-            await db.collection("users").updateOne(
+            await db.collection("users")
+            .updateOne(
                 {
                     _id:user._id
                 },
                 {
                     $set:{
+
                         comprador:true,
 
                         nome: nome ?? user.nome,
                         email: email ?? user.email,
-                        birthdate: birthdate ?? user.birthdate,
 
-                        cep: cep ?? user.cep,
-                        logradouro: logradouro ?? user.logradouro,
-                        numero: numero ?? user.numero,
-                        complemento: complemento ?? user.complemento,
-                        bairro: bairro ?? user.bairro,
-                        municipio: municipio ?? user.municipio,
-                        uf: uf ?? user.uf,
+                        birthdate:
+                            birthdate ?? user.birthdate,
 
-                        fone1: fone1 ?? user.fone1,
-                        fone2: fone2 ?? user.fone2,
 
-                        walletid: walletid ?? user.walletid,
-                        accountid: accountid ?? user.accountid,
+                        cep:
+                            cep ?? user.cep,
+
+                        logradouro:
+                            logradouro ?? user.logradouro,
+
+                        numero:
+                            numero ?? user.numero,
+
+                        complemento:
+                            complemento ?? user.complemento,
+
+                        bairro:
+                            bairro ?? user.bairro,
+
+                        municipio:
+                            municipio ?? user.municipio,
+
+                        uf:
+                            uf ?? user.uf,
+
+
+                        fone1:
+                            fone1 ?? user.fone1,
+
+                        fone2:
+                            fone2 ?? user.fone2,
+
+
+                        walletid:
+                            walletid ?? user.walletid,
+
+                        accountid:
+                            accountid ?? user.accountid,
+
 
                         atualizadoEm:new Date()
                     }
@@ -1404,9 +1427,17 @@ app.put("/api-v2/users/sync", async (req, res) => {
             );
 
 
+            console.log(
+                "🟢 USER atualizado"
+            );
+
+
             return res.json({
+
                 ok:true,
+
                 action:"updated",
+
                 id:user._id
             });
 
@@ -1414,23 +1445,24 @@ app.put("/api-v2/users/sync", async (req, res) => {
 
 
 
-        // ======================================
-        // USER NOVO
-        // ======================================
-
-        console.log("➕ criando novo user");
+        // ===============================
+        // NOVO USER
+        // ===============================
 
 
-        const newUser = {
+        const newUser={
 
             _id: await gerarId(),
 
             documento:doc,
+
             cliente_id,
+
 
             nome,
             email,
             birthdate,
+
 
             cep,
             logradouro,
@@ -1440,52 +1472,69 @@ app.put("/api-v2/users/sync", async (req, res) => {
             municipio,
             uf,
 
+
             fone1,
             fone2,
+
 
             walletid,
             accountid,
 
+
             comprador:true,
+
             nivel:7,
 
+
             criadoEm:new Date(),
+
             atualizadoEm:new Date()
         };
 
 
-        console.log("📦 novo user:", newUser);
+        console.log(
+            "🆕 criando user:",
+            newUser
+        );
 
 
         await db.collection("users")
-            .insertOne(newUser);
+        .insertOne(newUser);
 
+
+
+        console.log(
+            "🟢 USER inserido"
+        );
 
 
         return res.json({
+
             ok:true,
+
             action:"inserted",
+
             id:newUser._id
         });
 
 
+    }
+    catch(err){
 
-    } catch(err) {
+        console.error(
+            "💥 users/sync ERRO:",
+            err
+        );
 
 
-        console.error("💥 users/sync ERRO REAL:");
-        console.error(err);
-
-
-        return res.status(500).json({
+        return res.status(500)
+        .json({
 
             ok:false,
 
             error:"internal_error",
 
-            message:err.message,
-
-            stack:err.stack
+            message:err.message
 
         });
 
