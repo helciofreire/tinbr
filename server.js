@@ -1331,8 +1331,6 @@ app.put("/api-v2/users/sync", async (req, res) => {
 
         if (!documento || !cliente_id) {
 
-            console.log("⛔ dados obrigatórios ausentes");
-
             return res.status(400).json({
                 ok:false,
                 error:"missing_data"
@@ -1340,31 +1338,67 @@ app.put("/api-v2/users/sync", async (req, res) => {
         }
 
 
-        // CPF ou CNPJ alfanumérico
+        // ==========================
+        // NORMALIZA DOCUMENTO
+        // ==========================
+
         const doc = String(documento)
-    .replace(/[^a-zA-Z0-9]/g, "")
-    .toUpperCase();
-
-	console.log("🔎 SYNC BUSCA USER");
-	console.log({
-    	documentoRecebido: documento,
-    	documentoTratado: doc,
-    	cliente_id
-});
+            .replace(/[^a-zA-Z0-9]/g,"")
+            .toUpperCase();
 
 
-const user = await db.collection("users").findOne({
-    documento: doc,
-    cliente_id
-});
+        console.log("🔎 DOCUMENTO NORMALIZADO", {
+            recebido: documento,
+            tratado: doc,
+            cliente_id
+        });
 
 
-console.log("🔎 RESULTADO FIND USER:", user);
+
+        // ==========================
+        // PROCURA USER LOCAL
+        // ==========================
+
+        let user = await db.collection("users")
+            .findOne({
+                documento: doc,
+                cliente_id
+            });
 
 
-        // ===============================
-        // EXISTE
-        // ===============================
+
+        // ==========================
+        // FALLBACK:
+        // tenta documento original limpo
+        // ==========================
+
+        if(!user){
+
+            const docNumerico = String(documento)
+                .replace(/\D/g,"");
+
+
+            if(docNumerico !== doc){
+
+                user = await db.collection("users")
+                    .findOne({
+                        documento: docNumerico,
+                        cliente_id
+                    });
+
+            }
+
+        }
+
+
+        console.log("🔎 USER ENCONTRADO:", user);
+
+
+
+        // ==========================
+        // EXISTE -> UPDATE
+        // ==========================
+
         if(user){
 
 
@@ -1380,46 +1414,21 @@ console.log("🔎 RESULTADO FIND USER:", user);
 
                         nome: nome ?? user.nome,
                         email: email ?? user.email,
+                        birthdate: birthdate ?? user.birthdate,
 
-                        birthdate:
-                            birthdate ?? user.birthdate,
+                        cep: cep ?? user.cep,
+                        logradouro: logradouro ?? user.logradouro,
+                        numero: numero ?? user.numero,
+                        complemento: complemento ?? user.complemento,
+                        bairro: bairro ?? user.bairro,
+                        municipio: municipio ?? user.municipio,
+                        uf: uf ?? user.uf,
 
+                        fone1: fone1 ?? user.fone1,
+                        fone2: fone2 ?? user.fone2,
 
-                        cep:
-                            cep ?? user.cep,
-
-                        logradouro:
-                            logradouro ?? user.logradouro,
-
-                        numero:
-                            numero ?? user.numero,
-
-                        complemento:
-                            complemento ?? user.complemento,
-
-                        bairro:
-                            bairro ?? user.bairro,
-
-                        municipio:
-                            municipio ?? user.municipio,
-
-                        uf:
-                            uf ?? user.uf,
-
-
-                        fone1:
-                            fone1 ?? user.fone1,
-
-                        fone2:
-                            fone2 ?? user.fone2,
-
-
-                        walletid:
-                            walletid ?? user.walletid,
-
-                        accountid:
-                            accountid ?? user.accountid,
-
+                        walletid: walletid ?? user.walletid,
+                        accountid: accountid ?? user.accountid,
 
                         atualizadoEm:new Date()
                     }
@@ -1427,27 +1436,71 @@ console.log("🔎 RESULTADO FIND USER:", user);
             );
 
 
-            console.log(
-                "🟢 USER atualizado"
-            );
+            console.log("🟢 USER ATUALIZADO", user._id);
 
 
             return res.json({
 
                 ok:true,
-
                 action:"updated",
-
                 id:user._id
+
             });
 
         }
 
 
 
-        // ===============================
-        // NOVO USER
-        // ===============================
+        // ==========================
+        // ANTES DE INSERT:
+        // GARANTIA CONTRA DUPLICIDADE
+        // ==========================
+
+
+        const existeMesmoDoc = await db.collection("users")
+            .findOne({
+                documento:doc,
+                cliente_id
+            });
+
+
+        if(existeMesmoDoc){
+
+
+            console.log(
+                "⚠️ USER apareceu antes do insert, fazendo update"
+            );
+
+
+            await db.collection("users")
+            .updateOne(
+                {
+                    _id:existeMesmoDoc._id
+                },
+                {
+                    $set:{
+                        comprador:true,
+                        atualizadoEm:new Date()
+                    }
+                }
+            );
+
+
+            return res.json({
+
+                ok:true,
+                action:"updated_after_check",
+                id:existeMesmoDoc._id
+
+            });
+
+        }
+
+
+
+        // ==========================
+        // INSERT NOVO
+        // ==========================
 
 
         const newUser={
@@ -1458,11 +1511,9 @@ console.log("🔎 RESULTADO FIND USER:", user);
 
             cliente_id,
 
-
             nome,
             email,
             birthdate,
-
 
             cep,
             logradouro,
@@ -1472,54 +1523,46 @@ console.log("🔎 RESULTADO FIND USER:", user);
             municipio,
             uf,
 
-
             fone1,
             fone2,
 
-
             walletid,
             accountid,
-
 
             comprador:true,
 
             nivel:7,
 
-
             criadoEm:new Date(),
-
             atualizadoEm:new Date()
+
         };
 
 
         console.log(
-            "🆕 criando user:",
+            "🆕 INSERT USER",
             newUser
         );
 
 
         await db.collection("users")
-        .insertOne(newUser);
+            .insertOne(newUser);
 
-
-
-        console.log(
-            "🟢 USER inserido"
-        );
 
 
         return res.json({
 
             ok:true,
-
             action:"inserted",
-
             id:newUser._id
+
         });
+
 
 
     }
     catch(err){
+
 
         console.error(
             "💥 users/sync ERRO:",
@@ -1534,7 +1577,9 @@ console.log("🔎 RESULTADO FIND USER:", user);
 
             error:"internal_error",
 
-            message:err.message
+            message:err.message,
+
+            code:err.code || null
 
         });
 
