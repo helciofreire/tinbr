@@ -1300,21 +1300,34 @@ app.get("/users/email/:email", async (req, res) => {
     }
 });
 
+// ===============================================
 // PUT SYNC USERS V2
+// ===============================================
+
 app.put("/api-v2/users/sync", async (req, res) => {
 
     try {
 
+
+        console.log("================================");
         console.log("🔵 USERS SYNC V2 INICIO");
-        console.log("PAYLOAD:", req.body);
+        console.log("================================");
+
+
+        console.log("📦 PAYLOAD RECEBIDO:");
+        console.log(req.body);
+
 
 
         const {
+
             documento,
             cliente_id,
+
             nome,
             email,
             birthdate,
+
             cep,
             logradouro,
             numero,
@@ -1322,227 +1335,389 @@ app.put("/api-v2/users/sync", async (req, res) => {
             bairro,
             municipio,
             uf,
+
             fone1,
             fone2,
+
             walletid,
             accountid
+
         } = req.body;
 
 
-        if (!documento || !cliente_id) {
+
+        // ==========================================
+        // VALIDAÇÃO
+        // ==========================================
+
+        if(!documento || !cliente_id){
+
+            console.log("⛔ DADOS OBRIGATÓRIOS AUSENTES");
+
 
             return res.status(400).json({
+
                 ok:false,
+
                 error:"missing_data"
+
             });
+
         }
 
 
-        // ==========================
+
+        // ==========================================
         // NORMALIZA DOCUMENTO
-        // ==========================
+        // CPF / CNPJ NOVO ALFANUMÉRICO
+        // ==========================================
 
         const doc = String(documento)
             .replace(/[^a-zA-Z0-9]/g,"")
             .toUpperCase();
 
 
-        console.log("🔎 DOCUMENTO NORMALIZADO", {
+
+        console.log("🔎 DOCUMENTO NORMALIZADO");
+
+        console.log({
+
             recebido: documento,
+
             tratado: doc,
+
             cliente_id
+
         });
 
 
 
-        // ==========================
-        // PROCURA USER LOCAL
-        // ==========================
+        // ==========================================
+        // BUSCA USER LOCAL
+        // ==========================================
+
 
         let user = await db.collection("users")
             .findOne({
+
                 documento: doc,
+
                 cliente_id
+
             });
 
 
 
-        // ==========================
-        // FALLBACK:
-        // tenta documento original limpo
-        // ==========================
+        console.log(
+            "🔎 RESULTADO BUSCA PRINCIPAL:",
+            user
+        );
+
+
+
+        // ==========================================
+        // FALLBACK
+        // CASO DOCUMENTO ANTIGO TENHA FORMATAÇÃO
+        // ==========================================
+
 
         if(!user){
 
-            const docNumerico = String(documento)
+
+            const docLimpo = String(documento)
                 .replace(/\D/g,"");
 
 
-            if(docNumerico !== doc){
+
+            if(docLimpo !== doc){
+
 
                 user = await db.collection("users")
                     .findOne({
-                        documento: docNumerico,
+
+                        documento:docLimpo,
+
                         cliente_id
+
                     });
+
+
+
+                console.log(
+                    "🔎 RESULTADO FALLBACK:",
+                    user
+                );
+
 
             }
 
         }
 
 
-        console.log("🔎 USER ENCONTRADO:", user);
 
 
+        // ==========================================
+        // EXISTE USER
+        // SEMPRE UPDATE
+        // ==========================================
 
-        // ==========================
-        // EXISTE -> UPDATE
-        // ==========================
 
         if(user){
 
 
-            await db.collection("users")
-            .updateOne(
-                {
-                    _id:user._id
-                },
-                {
-                    $set:{
-
-                        comprador:true,
-
-                        nome: nome ?? user.nome,
-                        email: email ?? user.email,
-                        birthdate: birthdate ?? user.birthdate,
-
-                        cep: cep ?? user.cep,
-                        logradouro: logradouro ?? user.logradouro,
-                        numero: numero ?? user.numero,
-                        complemento: complemento ?? user.complemento,
-                        bairro: bairro ?? user.bairro,
-                        municipio: municipio ?? user.municipio,
-                        uf: uf ?? user.uf,
-
-                        fone1: fone1 ?? user.fone1,
-                        fone2: fone2 ?? user.fone2,
-
-                        walletid: walletid ?? user.walletid,
-                        accountid: accountid ?? user.accountid,
-
-                        atualizadoEm:new Date()
-                    }
-                }
+            console.log(
+                "🟢 USER EXISTENTE -> UPDATE",
+                user._id
             );
 
 
-            console.log("🟢 USER ATUALIZADO", user._id);
+
+            await db.collection("users")
+            .updateOne(
+
+                {
+                    _id:user._id
+                },
+
+
+                {
+
+                    $set:{
+
+
+                        comprador:true,
+
+
+                        nome:
+                            nome ?? user.nome,
+
+
+                        email:
+                            email ?? user.email,
+
+
+                        birthdate:
+                            birthdate ?? user.birthdate,
+
+
+
+                        cep:
+                            cep ?? user.cep,
+
+
+                        logradouro:
+                            logradouro ?? user.logradouro,
+
+
+                        numero:
+                            numero ?? user.numero,
+
+
+                        complemento:
+                            complemento ?? user.complemento,
+
+
+                        bairro:
+                            bairro ?? user.bairro,
+
+
+                        municipio:
+                            municipio ?? user.municipio,
+
+
+                        uf:
+                            uf ?? user.uf,
+
+
+
+                        fone1:
+                            fone1 ?? user.fone1,
+
+
+                        fone2:
+                            fone2 ?? user.fone2,
+
+
+
+                        walletid:
+                            walletid ?? user.walletid,
+
+
+                        accountid:
+                            accountid ?? user.accountid,
+
+
+
+                        atualizadoEm:new Date()
+
+                    }
+
+                }
+
+            );
+
 
 
             return res.json({
 
                 ok:true,
+
                 action:"updated",
+
                 id:user._id
 
             });
 
+
         }
 
 
 
-        // ==========================
-        // ANTES DE INSERT:
-        // GARANTIA CONTRA DUPLICIDADE
-        // ==========================
 
 
-        const existeMesmoDoc = await db.collection("users")
+        // ==========================================
+        // SEGUNDA GARANTIA
+        // ANTES DO INSERT
+        // ==========================================
+
+
+        const existeAntesInsert =
+            await db.collection("users")
             .findOne({
+
                 documento:doc,
+
                 cliente_id
+
             });
 
 
-        if(existeMesmoDoc){
+
+        if(existeAntesInsert){
 
 
             console.log(
-                "⚠️ USER apareceu antes do insert, fazendo update"
+                "⚠️ USER ENCONTRADO NA SEGUNDA VERIFICAÇÃO"
             );
+
 
 
             await db.collection("users")
             .updateOne(
+
                 {
-                    _id:existeMesmoDoc._id
+                    _id:existeAntesInsert._id
                 },
+
+
                 {
+
                     $set:{
+
                         comprador:true,
+
                         atualizadoEm:new Date()
+
                     }
+
                 }
+
             );
+
 
 
             return res.json({
 
                 ok:true,
+
                 action:"updated_after_check",
-                id:existeMesmoDoc._id
+
+                id:existeAntesInsert._id
 
             });
+
 
         }
 
 
 
-        // ==========================
-        // INSERT NOVO
-        // ==========================
 
 
-        const newUser={
+        // ==========================================
+        // INSERT NOVO USER
+        // ==========================================
+
+
+        const newUser = {
+
 
             _id: await gerarId(),
 
+
             documento:doc,
+
 
             cliente_id,
 
+
+
             nome,
+
             email,
+
             birthdate,
 
+
+
             cep,
+
             logradouro,
+
             numero,
+
             complemento,
+
             bairro,
+
             municipio,
+
             uf,
 
+
+
             fone1,
+
             fone2,
 
+
+
             walletid,
+
             accountid,
+
+
 
             comprador:true,
 
+
             nivel:7,
 
+
+
             criadoEm:new Date(),
+
             atualizadoEm:new Date()
+
 
         };
 
 
+
         console.log(
-            "🆕 INSERT USER",
+            "🆕 INSERT NOVO USER:",
             newUser
         );
+
 
 
         await db.collection("users")
@@ -1550,10 +1725,18 @@ app.put("/api-v2/users/sync", async (req, res) => {
 
 
 
+        console.log(
+            "🟢 USER INSERIDO"
+        );
+
+
+
         return res.json({
 
             ok:true,
+
             action:"inserted",
+
             id:newUser._id
 
         });
@@ -1561,13 +1744,17 @@ app.put("/api-v2/users/sync", async (req, res) => {
 
 
     }
+
+
+
     catch(err){
 
 
         console.error(
-            "💥 users/sync ERRO:",
+            "💥 USERS SYNC V2 ERRO:",
             err
         );
+
 
 
         return res.status(500)
@@ -1579,11 +1766,17 @@ app.put("/api-v2/users/sync", async (req, res) => {
 
             message:err.message,
 
-            code:err.code || null
+            code:err.code || null,
+
+            keyPattern:err.keyPattern || null,
+
+            keyValue:err.keyValue || null
 
         });
 
+
     }
+
 
 });
 
