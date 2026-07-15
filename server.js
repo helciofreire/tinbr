@@ -1303,6 +1303,11 @@ app.get("/users/email/:email", async (req, res) => {
 // PUT SYNC USERS V2
 app.put("/api-v2/users/sync", async (req, res) => {
 
+    console.log("================================");
+    console.log("🔵 USERS SYNC V2");
+    console.log("BODY:", req.body);
+    console.log("================================");
+
     try {
 
         const {
@@ -1324,83 +1329,103 @@ app.put("/api-v2/users/sync", async (req, res) => {
             accountid
         } = req.body;
 
-        const doc = (documento || "").replace(/\D/g, "");
+
+        const doc = (documento || "")
+            .replace(/\D/g, "");
+
+
+        console.log("📌 documento limpo:", doc);
+        console.log("📌 cliente_id:", cliente_id);
+
 
         if (!doc || !cliente_id) {
+
+            console.log("⛔ dados obrigatórios ausentes");
+
             return res.status(400).json({
-                ok: false,
-                error: "missing_data"
+                ok:false,
+                error:"missing_data"
             });
         }
 
-        // =========================
-        // 🔵 1. BUSCA SEGURA
-        // =========================
-        const user = await db.collection("users").findOne({
-            documento: doc,
-            cliente_id
-        });
 
-        // =========================
-        // 🔵 2. SE EXISTE → UPDATE SE NECESSÁRIO
-        // =========================
+        console.log("🔎 procurando user");
+
+
+        const user =
+            await db.collection("users").findOne({
+                documento: doc,
+                cliente_id
+            });
+
+
+        console.log("👤 user encontrado:", !!user);
+
+
+
+        // ======================================
+        // USER EXISTENTE
+        // ======================================
         if (user) {
 
-            const precisaUpdate =
-                user.comprador !== true;
 
-            if (precisaUpdate) {
+            console.log("♻️ atualizando user");
 
-                await db.collection("users").updateOne(
-                    { _id: user._id },
-                    {
-                        $set: {
-                            comprador: true,
-                            nivel: user.nivel ?? 7,
 
-                            nome: nome ?? user.nome,
-                            email: email ?? user.email,
-                            birthdate: birthdate ?? user.birthdate,
+            await db.collection("users").updateOne(
+                {
+                    _id:user._id
+                },
+                {
+                    $set:{
+                        comprador:true,
 
-                            cep: cep ?? user.cep,
-                            logradouro: logradouro ?? user.logradouro,
-                            numero: numero ?? user.numero,
-                            complemento: complemento ?? user.complemento,
-                            bairro: bairro ?? user.bairro,
-                            municipio: municipio ?? user.municipio,
-                            uf: uf ?? user.uf,
+                        nome: nome ?? user.nome,
+                        email: email ?? user.email,
+                        birthdate: birthdate ?? user.birthdate,
 
-                            fone1: fone1 ?? user.fone1,
-                            fone2: fone2 ?? user.fone2,
+                        cep: cep ?? user.cep,
+                        logradouro: logradouro ?? user.logradouro,
+                        numero: numero ?? user.numero,
+                        complemento: complemento ?? user.complemento,
+                        bairro: bairro ?? user.bairro,
+                        municipio: municipio ?? user.municipio,
+                        uf: uf ?? user.uf,
 
-                            walletid: walletid ?? user.walletid,
-                            accountid: accountid ?? user.accountid,
+                        fone1: fone1 ?? user.fone1,
+                        fone2: fone2 ?? user.fone2,
 
-                            atualizadoEm: new Date()
-                        }
+                        walletid: walletid ?? user.walletid,
+                        accountid: accountid ?? user.accountid,
+
+                        atualizadoEm:new Date()
                     }
-                );
+                }
+            );
 
-                return res.json({
-                    ok: true,
-                    action: "updated",
-                    id: user._id
-                });
-            }
 
             return res.json({
-                ok: true,
-                action: "no_change",
-                id: user._id
+                ok:true,
+                action:"updated",
+                id:user._id
             });
+
         }
 
-        // =========================
-        // 🔵 3. NÃO EXISTE → INSERE
-        // =========================
+
+
+        // ======================================
+        // USER NOVO
+        // ======================================
+
+        console.log("➕ criando novo user");
+
+
         const newUser = {
+
             _id: await gerarId(),
-            documento: doc,
+
+            documento:doc,
             cliente_id,
 
             nome,
@@ -1421,29 +1446,51 @@ app.put("/api-v2/users/sync", async (req, res) => {
             walletid,
             accountid,
 
-            comprador: true,
-            nivel: 7,
+            comprador:true,
+            nivel:7,
 
-            criadoEm: new Date(),
-            atualizadoEm: new Date()
+            criadoEm:new Date(),
+            atualizadoEm:new Date()
         };
 
-        await db.collection("users").insertOne(newUser);
+
+        console.log("📦 novo user:", newUser);
+
+
+        await db.collection("users")
+            .insertOne(newUser);
+
+
 
         return res.json({
-            ok: true,
-            action: "inserted",
-            id: newUser._id
+            ok:true,
+            action:"inserted",
+            id:newUser._id
         });
 
-    } catch (err) {
-        console.error("💥 users/sync:", err);
+
+
+    } catch(err) {
+
+
+        console.error("💥 users/sync ERRO REAL:");
+        console.error(err);
+
 
         return res.status(500).json({
-            ok: false,
-            error: "internal_error"
+
+            ok:false,
+
+            error:"internal_error",
+
+            message:err.message,
+
+            stack:err.stack
+
         });
+
     }
+
 });
 
 
