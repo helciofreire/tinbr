@@ -1300,6 +1300,28 @@ app.get("/users/email/:email", async (req, res) => {
     }
 });
 
+async function gerarId() {
+
+    const letras = "123456789ABCDEFGHJKMNPQRSTUVXWYZ";
+
+    while (true) {
+
+        let id = "";
+
+        for (let i = 0; i < 12; i++) {
+            id += letras[Math.floor(Math.random() * letras.length)];
+        }
+
+        const existe = await db.collection("users").findOne({ _id: id });
+
+        if (!existe) {
+            return id;
+        }
+    }
+
+}
+
+
 // ===============================================
 // PUT SYNC USERS V2
 // ===============================================
