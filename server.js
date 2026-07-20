@@ -765,6 +765,13 @@ app.delete("/proprietarios/:id", async (req, res) => {
 //================= INSERIR COMPRADORES =============================
 app.post("/compradores", async (req, res) => {
 
+console.log("================================");
+console.log("📥 BODY RECEBIDO /compradores");
+console.log(req.body);
+console.log("documento:", req.body.documento);
+console.log("razao:", req.body.razao);
+console.log("================================");
+
   try {
 
     const dados = req.body;
