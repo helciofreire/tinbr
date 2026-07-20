@@ -762,6 +762,7 @@ app.delete("/proprietarios/:id", async (req, res) => {
   }
 });
 
+//================= INSERIR COMPRADORES =============================
 app.post("/compradores", async (req, res) => {
 
   try {
@@ -787,8 +788,7 @@ app.post("/compradores", async (req, res) => {
     // =====================================================
 
     const novoId =
-      dados._id ||
-      Date.now().toString() + Math.random().toString(36).slice(2, 8);
+    dados._id || gerarId();
 
     // =====================================================
     // 🔥 VERIFICA DUPLICIDADE
