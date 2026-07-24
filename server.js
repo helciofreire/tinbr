@@ -1355,7 +1355,7 @@ app.put("/api-v2/users/sync", async (req, res) => {
 
             nome,
             email,
-            birthdate,
+            birthDate,
 
             cep,
             logradouro,
@@ -1368,8 +1368,8 @@ app.put("/api-v2/users/sync", async (req, res) => {
             fone1,
             fone2,
 
-            walletid,
-            accountid
+            walletId,
+            accountId
 
         } = req.body;
 
@@ -1525,8 +1525,8 @@ app.put("/api-v2/users/sync", async (req, res) => {
                             email ?? user.email,
 
 
-                        birthdate:
-                            birthdate ?? user.birthdate,
+                        birthDate:
+                            birthDate ?? user.birthDate,
 
 
 
@@ -1568,12 +1568,12 @@ app.put("/api-v2/users/sync", async (req, res) => {
 
 
 
-                        walletid:
-                            walletid ?? user.walletid,
+                        walletId:
+                            walletId ?? user.walletId,
 
 
-                        accountid:
-                            accountid ?? user.accountid,
+                        accountId:
+                            accountId ?? user.accountId,
 
 
 
@@ -1694,7 +1694,7 @@ app.put("/api-v2/users/sync", async (req, res) => {
 
             email,
 
-            birthdate,
+            birthDate,
 
 
 
@@ -1720,9 +1720,9 @@ app.put("/api-v2/users/sync", async (req, res) => {
 
 
 
-            walletid,
+            walletId,
 
-            accountid,
+            accountId,
 
 
 
