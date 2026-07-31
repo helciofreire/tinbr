@@ -1645,12 +1645,28 @@ app.put("/api-v2/users/sync", async (req, res) => {
                 {
 
                     $set:{
+    			comprador:true,
 
-                        comprador:true,
+    			nome:
+        		nome ?? existeAntesInsert.nome,
 
-                        atualizadoEm:new Date()
+    			email:
+        		email ?? existeAntesInsert.email,
 
-                    }
+    			birthDate:
+        		birthDate ?? existeAntesInsert.birthDate,
+
+    			funcao:
+        		funcao ?? existeAntesInsert.funcao,
+
+    			walletId:
+        		walletId ?? existeAntesInsert.walletId,
+
+    			accountId:
+        		accountId ?? existeAntesInsert.accountId,
+
+    			atualizadoEm:new Date()
+			}
 
                 }
 
