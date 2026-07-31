@@ -1357,6 +1357,8 @@ app.put("/api-v2/users/sync", async (req, res) => {
             email,
             birthDate,
 
+            funcao,
+
             cep,
             logradouro,
             numero,
@@ -1528,7 +1530,8 @@ app.put("/api-v2/users/sync", async (req, res) => {
                         birthDate:
                             birthDate ?? user.birthDate,
 
-
+			funcao:
+        		    funcao ?? user.funcao,
 
                         cep:
                             cep ?? user.cep,
@@ -1698,7 +1701,7 @@ app.put("/api-v2/users/sync", async (req, res) => {
 
             birthDate,
 
-
+            funcao,
 
             cep,
 
