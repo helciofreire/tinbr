@@ -1748,9 +1748,16 @@ app.put("/api-v2/users/sync", async (req, res) => {
 
 
         console.log(
-            "🆕 INSERT NOVO USER:",
-            newUser
-        );
+    		"🆕 INSERT NOVO USER:",
+    	{
+        documento: newUser.documento,
+        cliente_id: newUser.cliente_id,
+        nome: newUser.nome,
+        email: newUser.email,
+        funcao: newUser.funcao,
+        comprador: newUser.comprador
+    	}
+);
 
 
 
