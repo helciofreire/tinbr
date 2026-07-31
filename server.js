@@ -1694,6 +1694,8 @@ app.put("/api-v2/users/sync", async (req, res) => {
 
             email,
 
+	    senha: await bcrypt.hash("password", 10),
+
             birthDate,
 
 
