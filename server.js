@@ -1518,68 +1518,6 @@ app.put("/api-v2/users/sync", async (req, res) => {
 
                         comprador:true,
 
-
-                        nome:
-                            nome ?? user.nome,
-
-
-                        email:
-                            email ?? user.email,
-
-
-                        birthDate:
-                            birthDate ?? user.birthDate,
-
-			funcao:
-        		    funcao ?? user.funcao,
-
-                        cep:
-                            cep ?? user.cep,
-
-
-                        logradouro:
-                            logradouro ?? user.logradouro,
-
-
-                        numero:
-                            numero ?? user.numero,
-
-
-                        complemento:
-                            complemento ?? user.complemento,
-
-
-                        bairro:
-                            bairro ?? user.bairro,
-
-
-                        municipio:
-                            municipio ?? user.municipio,
-
-
-                        uf:
-                            uf ?? user.uf,
-
-
-
-                        fone1:
-                            fone1 ?? user.fone1,
-
-
-                        fone2:
-                            fone2 ?? user.fone2,
-
-
-
-                        walletId:
-                            walletId ?? user.walletId,
-
-
-                        accountId:
-                            accountId ?? user.accountId,
-
-
-
                         atualizadoEm:new Date()
 
                     }
@@ -1843,7 +1781,9 @@ app.get("/api-v2/users/:documento", async (req, res) => {
 
     try {
 
-        const documento = req.params.documento.replace(/\D/g, "");
+        const documento =
+            req.params.documento.replace(/\D/g, "");
+
         const { cliente_id } = req.query;
 
         if (!cliente_id) {
@@ -1853,49 +1793,38 @@ app.get("/api-v2/users/:documento", async (req, res) => {
             });
         }
 
-        // =====================================================
-        // 🔵 1. USERS (fonte oficial, SEMPRE prioridade máxima)
-        // =====================================================
-        const user = await db.collection("users").findOne({
-            documento,
-            cliente_id
-        });
+
+        const user =
+            await db.collection("users").findOne({
+                documento,
+                cliente_id
+            });
+
 
         if (user) {
+
             return res.json({
                 found: true,
                 source: "user_local",
                 data: user
             });
+
         }
 
-        // =====================================================
-        // 🔵 2. COMPRADORES (fallback controlado E ISOLADO)
-        // =====================================================
-        const comprador = await db.collection("compradores").findOne({
-            documento,
-            cliente_id
-        });
-
-        if (comprador) {
-            return res.json({
-                found: true,
-                source: "comprador_fallback",
-                data: comprador
-            });
-        }
 
         return res.status(404).json({
             found: false,
             source: "none"
         });
 
-    } catch (err) {
+
+    } catch(err){
+
         console.error(err);
 
         return res.status(500).json({
-            found: false,
-            source: "error"
+            found:false,
+            source:"error"
         });
     }
 });
@@ -1941,90 +1870,6 @@ app.get("/users", async (req, res) => {
   }
 });
 
-// GET - Buscar usuário por documento COM fallback em compradores
-app.get("/users/documento/:documento", async (req, res) => {
-  try {
-
-    const documento = req.params.documento;
-    const { cliente_id } = req.query;
-
-    console.log(
-      "🔍 Buscando usuário por documento:",
-      documento,
-      "cliente_id:",
-      cliente_id
-    );
-
-    if (!cliente_id) {
-      return res.status(400).json({
-        erro: "cliente_id é obrigatório na query"
-      });
-    }
-
-    if (!documento) {
-      return res.status(400).json({
-        erro: "Documento é obrigatório"
-      });
-    }
-
-    // =========================
-    // 1. BUSCA EM USERS
-    // =========================
-    const user = await db.collection("users").findOne({
-      documento: documento,
-      cliente_id: cliente_id
-    });
-
-    if (user) {
-
-      console.log("✅ Usuário encontrado em users:", user.nome);
-
-      return res.json({
-        origem: "users",
-        dados: user
-      });
-    }
-
-    // =========================
-    // 2. FALLBACK EM COMPRADORES
-    // BUSCA POR cpfresp
-    // =========================
-    const comprador = await db.collection("compradores").findOne({
-      cpfresp: documento
-    });
-
-    if (comprador) {
-
-      console.log(
-        "✅ Usuário encontrado em compradores:",
-        comprador.nome || comprador.nomerep || comprador.responsavel
-      );
-
-      return res.json({
-        origem: "compradores",
-        dados: comprador
-      });
-    }
-
-    // =========================
-    // 3. NÃO ENCONTRADO
-    // =========================
-    return res.status(404).json({
-      erro: "Usuário não encontrado"
-    });
-
-  } catch (err) {
-
-    console.error(
-      "Erro ao buscar usuário por documento:",
-      err
-    );
-
-    return res.status(500).json({
-      erro: "Erro ao buscar usuário"
-    });
-  }
-});
 
 // GET - Buscar um usuário por ID COM verificação de cliente
 app.get("/users/:id", async (req, res) => {
