@@ -167,7 +167,9 @@ app.get("/api-v2/proprietarios-local/:documento", async (req, res) => {
     try {
 
         const documento =
-            req.params.documento.replace(/\D/g, "");
+            req.params.documento.trim()
+    		.replace(/[^a-zA-Z0-9]/g, "")
+    		.toUpperCase();
 
         const { cliente_id } = req.query;
 
@@ -204,7 +206,9 @@ app.get("/api-v2/proprietarios/:documento", async (req, res) => {
 
     try {
 
-        const documento = req.params.documento.replace(/\D/g, "");
+        const documento = req.params.documento.trim()
+    		.replace(/[^a-zA-Z0-9]/g, "")
+    		.toUpperCase();
         const { cliente_id } = req.query;
 
         const prop = await db.collection("proprietarios").findOne({
@@ -848,7 +852,9 @@ app.get("/api-v2/compradores-local/:documento", async (req, res) => {
     try {
 
         const documento =
-            req.params.documento.replace(/\D/g, "");
+            req.params.documento.trim()
+    		.replace(/[^a-zA-Z0-9]/g, "")
+    		.toUpperCase();
 
         const { cliente_id } = req.query;
 
@@ -886,7 +892,9 @@ app.get("/api-v2/compradores-plataforma/:documento", async (req, res) => {
     try {
 
         const documento =
-            req.params.documento.replace(/\D/g, "");
+            req.params.documento.trim()
+    		.replace(/[^a-zA-Z0-9]/g, "")
+    		.toUpperCase();
 
         const { cliente_id } = req.query;
 
@@ -928,7 +936,9 @@ app.get("/api-v2/compradores/:documento", async (req, res) => {
 
     try {
 
-        const documento = req.params.documento.replace(/\D/g, "");
+        const documento = req.params.documento.trim()
+    	.replace(/[^a-zA-Z0-9]/g, "")
+    	.toUpperCase();
 
         const doc = await db.collection("compradores").findOne({
             documento
@@ -972,7 +982,9 @@ app.get("/compradores/por-documento/:documento", async (req, res) => {
     }
 
     // Remove caracteres não numéricos (CPF/CNPJ)
-    const documentoLimpo = documento.replace(/\D/g, "");
+    const documentoLimpo = documento.trim()
+    	.replace(/[^a-zA-Z0-9]/g, "")
+    	.toUpperCase();
 
     const comprador = await db.collection("compradores").findOne({
       documento: documentoLimpo
@@ -1060,7 +1072,9 @@ app.get("/api-v2/clientes-plataforma/:documento", async (req, res) => {
     try {
 
         const documento =
-            req.params.documento.replace(/\D/g, "");
+            req.params.documento.trim()
+    		.replace(/[^a-zA-Z0-9]/g, "")
+    		.toUpperCase();
 
         const { cliente_id } = req.query;
 
@@ -1101,7 +1115,9 @@ app.get("/api-v2/clientes-local/:documento", async (req, res) => {
     try {
 
         const documento =
-            req.params.documento.replace(/\D/g, "");
+            req.params.documento.trim()
+    		.replace(/[^a-zA-Z0-9]/g, "")
+    		.toUpperCase();
 
         const { cliente_id } = req.query;
 
@@ -1138,7 +1154,9 @@ app.get("/api-v2/clientes/:documento", async (req, res) => {
 
     try {
 
-        const documento = req.params.documento.replace(/\D/g, "");
+        const documento = req.params.documento.trim()
+    		.replace(/[^a-zA-Z0-9]/g, "")
+    		.toUpperCase();
 
         const cliente = await db.collection("clientes").findOne({
             documento
@@ -1162,7 +1180,9 @@ app.get("/clientes/por-documento/:doc", async (req, res) => {
 
     const db = req.app.locals.db;
 
-    const doc = req.params.doc.replace(/\D/g, "");
+    const doc = req.params.doc.trim()
+    	.replace(/[^a-zA-Z0-9]/g, "")
+    	.toUpperCase();
 
     const cliente = await db.collection("clientes").findOne(
       { documento: doc },
@@ -1456,7 +1476,9 @@ app.put("/api-v2/users/sync", async (req, res) => {
 
 
             const docLimpo = String(documento)
-                .replace(/\D/g,"");
+                .trim()
+    		.replace(/[^a-zA-Z0-9]/g, "")
+    		.toUpperCase();
 
 
 
@@ -2288,7 +2310,9 @@ app.get("/proprietarios/plataforma/:documento", async (req, res) => {
 
   try {
 
-    const documento = req.params.documento.replace(/\D/g, "");
+    const documento = req.params.documento.trim()
+    .replace(/[^a-zA-Z0-9]/g, "")
+    .toUpperCase();
 
     if (!documento) {
       return res.status(400).json({ erro: "documento inválido" });
@@ -2317,7 +2341,9 @@ app.get("/proprietarios/plataforma/:documento", async (req, res) => {
 app.get("/resolver-documento-buyers-first/:documento", async (req, res) => {
   try {
 
-    const documento = req.params.documento.replace(/\D/g, "");
+    const documento = req.params.documento.trim()
+    .replace(/[^a-zA-Z0-9]/g, "")
+    .toUpperCase();
     const cliente_id = req.query.cliente_id;
 
     if (!cliente_id) {
