@@ -1893,6 +1893,65 @@ app.get("/users", async (req, res) => {
 });
 
 
+//=============== BUSCA USERS GLOBAL ============
+app.get("/api-v2/users-global/:documento", async (req, res) => {
+
+    try {
+
+        const documento =
+            req.params.documento.replace(/\D/g, "");
+
+        const { cliente_id } = req.query;
+
+        if (!cliente_id) {
+            return res.status(400).json({
+                found: false,
+                source: "missing_cliente_id"
+            });
+        }
+
+        const user =
+            await db.collection("users").findOne({
+                documento,
+                cliente_id: {
+                    $ne: cliente_id
+                }
+            });
+
+        if (!user) {
+
+            return res.status(404).json({
+                found: false,
+                source: "none",
+                data: null
+            });
+        }
+
+        return res.json({
+
+            found: true,
+
+            source: "user_global",
+
+            data: user
+        });
+
+    } catch (err) {
+
+        console.error(
+            "❌ Erro users-global:",
+            err
+        );
+
+        return res.status(500).json({
+            found: false,
+            source: "error",
+            data: null
+        });
+    }
+});
+
+
 // GET - Buscar um usuário por ID COM verificação de cliente
 app.get("/users/:id", async (req, res) => {
   try {
