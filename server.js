@@ -2014,7 +2014,7 @@ app.post("/users", async (req, res) => {
     
     res.json({ 
       sucesso: true, 
-      _id: resultado.insertedId,
+      _id: resultado.insertedId.toString(),
       mensagem: "Usuário criado com sucesso"
     });
     
