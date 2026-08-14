@@ -2007,10 +2007,11 @@ app.post("/users", async (req, res) => {
       }
     }
     
-    dados.criadoEm = new Date();
-    dados.atualizadoEm = new Date();
-    
-    const resultado = await db.collection("users").insertOne(dados);
+    	dados.criadoEm = new Date();
+	dados.atualizadoEm = new Date();
+	dados._id = await gerarId();
+
+	const resultado =     await db.collection("users").insertOne(dados);
     
     res.json({ 
       sucesso: true, 
