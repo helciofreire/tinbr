@@ -662,6 +662,12 @@ app.get("/proprietarios/bloqueados-por-responsavel/:cpfresp", async (req, res) =
 app.post("/proprietarios", async (req, res) => {
   try {
     const dados = req.body;
+
+	console.log("================================");
+    	console.log("📥 POST /proprietarios");
+    	console.log("🏢 companyType recebido:", dados.companyType);
+    	console.log("📦 BODY RECEBIDO:", dados);
+    	console.log("================================");
     
     // ✅ Validação obrigatória
     if (!dados.cliente_id) {
