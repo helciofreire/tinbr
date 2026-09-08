@@ -4262,39 +4262,79 @@ app.get("/propriedades/:id", async (req, res) => {
 app.post("/propriedades", async (req, res) => {
   try {
     const dados = req.body;
-    
+
+    // =====================================================
+    // VALIDAÇÃO DO CLIENTE
+    // =====================================================
+
     if (!dados.cliente_id) {
-      return res.status(400).json({ erro: "cliente_id é obrigatório no body" });
-    }
-    
-    // ✅ CORREÇÃO: Definir um campo único específico ou remover a validação
-    // Exemplo se tiver campo "codigo" único:
-    if (dados.codigo) {
-      const existente = await db.collection("propriedades").findOne({
-        codigo: dados.codigo,
-        cliente_id: dados.cliente_id
+      return res.status(400).json({
+        erro: "cliente_id é obrigatório no body"
       });
-      
-      if (existente) {
-        return res.status(400).json({ 
-          erro: "Código já cadastrado para este cliente" 
-        });
-      }
     }
-    
+
+    // =====================================================
+    // VALIDAÇÃO DO CNM
+    // =====================================================
+
+    if (!dados.cnm) {
+      return res.status(400).json({
+        erro: "cnm é obrigatório"
+      });
+    }
+
+    // =====================================================
+    // VERIFICA SE O CNM JÁ EXISTE
+    // 🔒 GLOBAL — NÃO CONSIDERA cliente_id
+    // =====================================================
+
+    const existente = await db.collection("propriedades").findOne({
+      cnm: dados.cnm
+    });
+
+    if (existente) {
+      return res.status(400).json({
+        erro: "imóvel já cadastrado"
+      });
+    }
+
+    // =====================================================
+    // DATAS
+    // =====================================================
+
     dados.criadoEm = new Date();
     dados.atualizadoEm = new Date();
-    
+
+    // =====================================================
+    // INSERT
+    // =====================================================
+
     const resultado = await db.collection("propriedades").insertOne(dados);
-    
-    res.json({ 
-      sucesso: true, 
+
+    return res.json({
+      sucesso: true,
       _id: resultado.insertedId,
-      mensagem: "Propriedades criada com sucesso"
+      mensagem: "Propriedade criada com sucesso"
     });
-    
+
   } catch (err) {
-    res.status(500).json({ erro: "Erro ao criar propriedade" });
+
+    console.error("❌ Erro ao criar propriedade:", err);
+
+    // =====================================================
+    // ÍNDICE UNIQUE DO CNM
+    // Proteção contra concorrência
+    // =====================================================
+
+    if (err.code === 11000) {
+      return res.status(400).json({
+        erro: "Imóvel já cadastrado"
+      });
+    }
+
+    return res.status(500).json({
+      erro: "Erro ao criar propriedade"
+    });
   }
 });
 
