@@ -2274,6 +2274,11 @@ app.patch("/users/:id/nivel", async (req, res) => {
           ? obs.trim()
           : "",
 
+      comissao:
+        typeof comissao === "string"
+            ? comissao.trim()
+            : "",
+
       cep:
         typeof cep === "string"
           ? cep.trim()
