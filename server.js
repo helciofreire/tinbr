@@ -2094,7 +2094,7 @@ app.post("/users", async (req, res) => {
 });
 
 // =========================================================
-// PATCH - Atualizar somente o nível do usuário comprador
+// PATCH - Atualizar usuário comprador que estava no nível 7
 // =========================================================
 
 app.patch("/users/:id/nivel", async (req, res) => {
@@ -2102,18 +2102,49 @@ app.patch("/users/:id/nivel", async (req, res) => {
   try {
 
     const id = req.params.id;
-    const { nivel } = req.body;
     const { cliente_id } = req.query;
+
+    const {
+      nivel,
+      email,
+      fone1,
+      fone2,
+      obs,
+      cep,
+      logradouro,
+      numero,
+      complemento,
+      bairro,
+      municipio,
+      uf
+    } = req.body;
 
     console.log("======================================");
     console.log("🚀 PATCH /users/:id/nivel");
     console.log("🆔 id:", id);
     console.log("🏢 cliente_id:", cliente_id);
-    console.log("📊 nivel:", nivel);
+
+    console.log("📦 DADOS RECEBIDOS:");
+    console.log({
+      nivel,
+      email,
+      fone1,
+      fone2,
+      obs,
+      cep,
+      logradouro,
+      numero,
+      complemento,
+      bairro,
+      municipio,
+      uf
+    });
+
     console.log("======================================");
 
+
     // =====================================================
-    // VALIDAÇÃO
+    // VALIDAÇÃO CLIENTE
     // =====================================================
 
     if (!cliente_id) {
@@ -2123,6 +2154,11 @@ app.patch("/users/:id/nivel", async (req, res) => {
       });
 
     }
+
+
+    // =====================================================
+    // VALIDAÇÃO NIVEL
+    // =====================================================
 
     if (
       nivel === undefined ||
@@ -2146,6 +2182,7 @@ app.patch("/users/:id/nivel", async (req, res) => {
 
     }
 
+
     // =====================================================
     // BUSCAR USUÁRIO
     // =====================================================
@@ -2157,11 +2194,12 @@ app.patch("/users/:id/nivel", async (req, res) => {
       });
 
     console.log(
-      "👤 usuário encontrado:",
+      "👤 USUÁRIO ENCONTRADO:",
       usuario
         ? JSON.stringify(usuario, null, 2)
         : null
     );
+
 
     if (!usuario) {
 
@@ -2170,6 +2208,7 @@ app.patch("/users/:id/nivel", async (req, res) => {
       });
 
     }
+
 
     // =====================================================
     // GARANTIA: PRECISA SER COMPRADOR
@@ -2187,8 +2226,128 @@ app.patch("/users/:id/nivel", async (req, res) => {
 
     }
 
+
     // =====================================================
-    // ATUALIZAR SOMENTE NIVEL
+    // GARANTIA: O USUÁRIO PRECISA ESTAR NO NÍVEL 7
+    // ANTES DA ALTERAÇÃO
+    // =====================================================
+
+    if (Number(usuario.nivel) !== 7) {
+
+      console.log(
+        "❌ Usuário não está mais no nível 7"
+      );
+
+      return res.status(400).json({
+        erro:
+          "Este usuário não está mais no nível 7 e não pode utilizar esta operação"
+      });
+
+    }
+
+
+    // =====================================================
+    // CAMPOS PERMITIDOS PARA ATUALIZAÇÃO
+    // =====================================================
+
+    const camposParaAtualizar = {
+
+      nivel: nivelNumerico,
+
+      email:
+        typeof email === "string"
+          ? email.trim()
+          : "",
+
+      fone1:
+        typeof fone1 === "string"
+          ? fone1.trim()
+          : "",
+
+      fone2:
+        typeof fone2 === "string"
+          ? fone2.trim()
+          : "",
+
+      obs:
+        typeof obs === "string"
+          ? obs.trim()
+          : "",
+
+      cep:
+        typeof cep === "string"
+          ? cep.trim()
+          : "",
+
+      logradouro:
+        typeof logradouro === "string"
+          ? logradouro.trim()
+          : "",
+
+      numero:
+        typeof numero === "string"
+          ? numero.trim()
+          : "",
+
+      complemento:
+        typeof complemento === "string"
+          ? complemento.trim()
+          : "",
+
+      bairro:
+        typeof bairro === "string"
+          ? bairro.trim()
+          : "",
+
+      municipio:
+        typeof municipio === "string"
+          ? municipio.trim()
+          : "",
+
+      uf:
+        typeof uf === "string"
+          ? uf.trim()
+          : "",
+
+      atualizadoEm: new Date()
+
+    };
+
+
+    // =====================================================
+    // IMPORTANTE:
+    //
+    // NÃO estamos recebendo nem atualizando:
+    //
+    // _id
+    // cliente_id
+    // nome
+    // documento
+    // comprador
+    // walletId
+    // accountId
+    // senha
+    // criadoEm
+    // proprietario
+    // responsavel
+    // responsavel_id
+    //
+    // Portanto esses campos permanecem intactos.
+    // =====================================================
+
+
+    console.log(
+      "📝 CAMPOS QUE SERÃO ATUALIZADOS:",
+      JSON.stringify(
+        camposParaAtualizar,
+        null,
+        2
+      )
+    );
+
+
+    // =====================================================
+    // ATUALIZAR USUÁRIO
     // =====================================================
 
     const resultado =
@@ -2196,17 +2355,17 @@ app.patch("/users/:id/nivel", async (req, res) => {
 
         {
           _id: id,
-          cliente_id
+          cliente_id,
+          comprador: true,
+          nivel: usuario.nivel
         },
 
         {
-          $set: {
-            nivel: nivelNumerico,
-            atualizadoEm: new Date()
-          }
+          $set: camposParaAtualizar
         }
 
       );
+
 
     console.log(
       "📊 matchedCount:",
@@ -2218,42 +2377,114 @@ app.patch("/users/:id/nivel", async (req, res) => {
       resultado.modifiedCount
     );
 
+
     if (resultado.matchedCount === 0) {
 
       return res.status(404).json({
-        erro: "Usuário não encontrado"
+        erro:
+          "Usuário não encontrado ou deixou de atender às condições de atualização"
       });
 
     }
+
+
+    // =====================================================
+    // BUSCAR USUÁRIO ATUALIZADO
+    // =====================================================
+
+    const usuarioAtualizado =
+      await db.collection("users").findOne({
+        _id: id,
+        cliente_id
+      });
+
 
     // =====================================================
     // SUCESSO
     // =====================================================
 
+    console.log("======================================");
+    console.log("✅ USUÁRIO ATUALIZADO COM SUCESSO");
+    console.log("🆔 _id:", id);
     console.log(
-      "✅ Nível atualizado:",
+      "📊 nível:",
       usuario.nivel,
       "→",
       nivelNumerico
     );
+    console.log("======================================");
+
 
     return res.json({
 
       sucesso: true,
 
       mensagem:
-        "Nível do usuário atualizado com sucesso",
+        "Usuário comprador atualizado com sucesso",
 
       data: {
-        _id: usuario._id,
-        documento: usuario.documento,
-        cliente_id: usuario.cliente_id,
-        comprador: usuario.comprador,
-        nivelAnterior: usuario.nivel,
-        nivelAtual: nivelNumerico
+
+        _id:
+          usuarioAtualizado._id,
+
+        cliente_id:
+          usuarioAtualizado.cliente_id,
+
+        nome:
+          usuarioAtualizado.nome,
+
+        documento:
+          usuarioAtualizado.documento,
+
+        nivel:
+          usuarioAtualizado.nivel,
+
+        comprador:
+          usuarioAtualizado.comprador,
+
+        email:
+          usuarioAtualizado.email,
+
+        fone1:
+          usuarioAtualizado.fone1,
+
+        fone2:
+          usuarioAtualizado.fone2,
+
+        cep:
+          usuarioAtualizado.cep,
+
+        logradouro:
+          usuarioAtualizado.logradouro,
+
+        numero:
+          usuarioAtualizado.numero,
+
+        complemento:
+          usuarioAtualizado.complemento,
+
+        bairro:
+          usuarioAtualizado.bairro,
+
+        municipio:
+          usuarioAtualizado.municipio,
+
+        uf:
+          usuarioAtualizado.uf,
+
+        obs:
+          usuarioAtualizado.obs,
+
+        walletId:
+          usuarioAtualizado.walletId,
+
+        accountId:
+          usuarioAtualizado.accountId
+
       }
 
     });
+
 
   } catch (err) {
 
@@ -2263,7 +2494,8 @@ app.patch("/users/:id/nivel", async (req, res) => {
     );
 
     return res.status(500).json({
-      erro: "Erro ao atualizar nível do usuário"
+      erro:
+        "Erro ao atualizar usuário comprador"
     });
 
   }
