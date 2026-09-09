@@ -1349,6 +1349,7 @@ async function gerarId() {
 }
 
 
+
 // ===============================================
 // PUT SYNC USERS V2
 // ===============================================
@@ -2091,6 +2092,184 @@ app.post("/users", async (req, res) => {
     res.status(500).json({ erro: "Erro ao criar usuário" });
   }
 });
+
+// =========================================================
+// PATCH - Atualizar somente o nível do usuário comprador
+// =========================================================
+
+app.patch("/users/:id/nivel", async (req, res) => {
+
+  try {
+
+    const id = req.params.id;
+    const { nivel } = req.body;
+    const { cliente_id } = req.query;
+
+    console.log("======================================");
+    console.log("🚀 PATCH /users/:id/nivel");
+    console.log("🆔 id:", id);
+    console.log("🏢 cliente_id:", cliente_id);
+    console.log("📊 nivel:", nivel);
+    console.log("======================================");
+
+    // =====================================================
+    // VALIDAÇÃO
+    // =====================================================
+
+    if (!cliente_id) {
+
+      return res.status(400).json({
+        erro: "cliente_id é obrigatório na query"
+      });
+
+    }
+
+    if (
+      nivel === undefined ||
+      nivel === null ||
+      nivel === ""
+    ) {
+
+      return res.status(400).json({
+        erro: "nivel é obrigatório"
+      });
+
+    }
+
+    const nivelNumerico = Number(nivel);
+
+    if (!Number.isInteger(nivelNumerico)) {
+
+      return res.status(400).json({
+        erro: "nivel inválido"
+      });
+
+    }
+
+    // =====================================================
+    // BUSCAR USUÁRIO
+    // =====================================================
+
+    const usuario =
+      await db.collection("users").findOne({
+        _id: id,
+        cliente_id
+      });
+
+    console.log(
+      "👤 usuário encontrado:",
+      usuario
+        ? JSON.stringify(usuario, null, 2)
+        : null
+    );
+
+    if (!usuario) {
+
+      return res.status(404).json({
+        erro: "Usuário não encontrado"
+      });
+
+    }
+
+    // =====================================================
+    // GARANTIA: PRECISA SER COMPRADOR
+    // =====================================================
+
+    if (usuario.comprador !== true) {
+
+      console.log(
+        "❌ Usuário não está marcado como comprador"
+      );
+
+      return res.status(400).json({
+        erro: "O usuário não está cadastrado como comprador"
+      });
+
+    }
+
+    // =====================================================
+    // ATUALIZAR SOMENTE NIVEL
+    // =====================================================
+
+    const resultado =
+      await db.collection("users").updateOne(
+
+        {
+          _id: id,
+          cliente_id
+        },
+
+        {
+          $set: {
+            nivel: nivelNumerico,
+            atualizadoEm: new Date()
+          }
+        }
+
+      );
+
+    console.log(
+      "📊 matchedCount:",
+      resultado.matchedCount
+    );
+
+    console.log(
+      "📊 modifiedCount:",
+      resultado.modifiedCount
+    );
+
+    if (resultado.matchedCount === 0) {
+
+      return res.status(404).json({
+        erro: "Usuário não encontrado"
+      });
+
+    }
+
+    // =====================================================
+    // SUCESSO
+    // =====================================================
+
+    console.log(
+      "✅ Nível atualizado:",
+      usuario.nivel,
+      "→",
+      nivelNumerico
+    );
+
+    return res.json({
+
+      sucesso: true,
+
+      mensagem:
+        "Nível do usuário atualizado com sucesso",
+
+      data: {
+        _id: usuario._id,
+        documento: usuario.documento,
+        cliente_id: usuario.cliente_id,
+        comprador: usuario.comprador,
+        nivelAnterior: usuario.nivel,
+        nivelAtual: nivelNumerico
+      }
+
+    });
+
+  } catch (err) {
+
+    console.error(
+      "💥 ERRO PATCH /users/:id/nivel:",
+      err
+    );
+
+    return res.status(500).json({
+      erro: "Erro ao atualizar nível do usuário"
+    });
+
+  }
+
+});
+
 
 // PUT - Atualizar usuário COM verificação de cliente
 app.put("/users/:id", async (req, res) => {
