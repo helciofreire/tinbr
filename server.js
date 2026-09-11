@@ -6510,7 +6510,7 @@ app.post("/users/login", async (req, res) => {
       nivel: usuario.nivel,
       cliente_id: usuario.cliente_id,
       proprietario: usuario.proprietario,
-
+      comprador: usuario.comprador,	
       wallet_use: usuario.walletId || null,
       wallet_cli: walletCliente,
 
