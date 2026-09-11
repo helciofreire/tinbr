@@ -2116,7 +2116,8 @@ app.patch("/users/:id/nivel", async (req, res) => {
       complemento,
       bairro,
       municipio,
-      uf
+      uf,
+      comissao
     } = req.body;
 
     console.log("======================================");
