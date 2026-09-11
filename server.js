@@ -2120,29 +2120,6 @@ app.patch("/users/:id/nivel", async (req, res) => {
       comissao
     } = req.body;
 
-    console.log("======================================");
-    console.log("🚀 PATCH /users/:id/nivel");
-    console.log("🆔 id:", id);
-    console.log("🏢 cliente_id:", cliente_id);
-
-    console.log("📦 DADOS RECEBIDOS:");
-    console.log({
-      nivel,
-      email,
-      fone1,
-      fone2,
-      obs,
-      cep,
-      logradouro,
-      numero,
-      complemento,
-      bairro,
-      municipio,
-      uf
-    });
-
-    console.log("======================================");
-
 
     // =====================================================
     // VALIDAÇÃO CLIENTE
@@ -2179,6 +2156,24 @@ app.patch("/users/:id/nivel", async (req, res) => {
 
       return res.status(400).json({
         erro: "nivel inválido"
+      });
+
+    }
+
+
+    // =====================================================
+    // VALIDAÇÃO COMISSÃO
+    // =====================================================
+
+    const comissaoNumerica =
+      typeof comissao === "number"
+        ? comissao
+        : 0;
+
+    if (!Number.isFinite(comissaoNumerica)) {
+
+      return res.status(400).json({
+        erro: "comissao inválida"
       });
 
     }
@@ -2222,7 +2217,8 @@ app.patch("/users/:id/nivel", async (req, res) => {
       );
 
       return res.status(400).json({
-        erro: "O usuário não está cadastrado como comprador"
+        erro:
+          "O usuário não está cadastrado como comprador"
       });
 
     }
@@ -2275,10 +2271,8 @@ app.patch("/users/:id/nivel", async (req, res) => {
           ? obs.trim()
           : "",
 
-      comissao:
-        typeof comissao === "string"
-            ? comissao.trim()
-            : "",
+      // COMISSÃO É NUMBER
+      comissao: comissaoNumerica,
 
       cep:
         typeof cep === "string"
@@ -2352,6 +2346,21 @@ app.patch("/users/:id/nivel", async (req, res) => {
     );
 
 
+    console.log(
+      "💰 COMISSÃO RECEBIDA:",
+      comissao,
+      "| tipo:",
+      typeof comissao
+    );
+
+    console.log(
+      "💰 COMISSÃO QUE SERÁ SALVA:",
+      comissaoNumerica,
+      "| tipo:",
+      typeof comissaoNumerica
+    );
+
+
     // =====================================================
     // ATUALIZAR USUÁRIO
     // =====================================================
@@ -2418,6 +2427,12 @@ app.patch("/users/:id/nivel", async (req, res) => {
       "→",
       nivelNumerico
     );
+    console.log(
+      "💰 comissão:",
+      usuario.comissao,
+      "→",
+      usuarioAtualizado.comissao
+    );
     console.log("======================================");
 
 
@@ -2480,6 +2495,9 @@ app.patch("/users/:id/nivel", async (req, res) => {
 
         obs:
           usuarioAtualizado.obs,
+
+        comissao:
+          usuarioAtualizado.comissao,
 
         walletId:
           usuarioAtualizado.walletId,
