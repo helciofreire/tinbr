@@ -4692,6 +4692,65 @@ app.get("/propriedades/:id", async (req, res) => {
   }
 });
 
+// =====================================================
+// GET - Consultar se CNM já existe
+// 🔒 GLOBAL — NÃO CONSIDERA cliente_id
+// =====================================================
+
+app.get("/propriedades/verificar-cnm/:cnm", async (req, res) => {
+
+  try {
+
+    const cnm = String(req.params.cnm || "").trim();
+
+    if (!cnm) {
+      return res.status(400).json({
+        encontrado: false,
+        erro: "cnm é obrigatório"
+      });
+    }
+
+    const propriedade =
+      await db.collection("propriedades").findOne(
+        { cnm },
+        {
+          projection: {
+            _id: 1,
+            cnm: 1
+          }
+        }
+      );
+
+    if (propriedade) {
+
+      return res.json({
+        encontrado: true,
+        mensagem: "Imóvel já cadastrado",
+        data: propriedade
+      });
+
+    }
+
+    return res.json({
+      encontrado: false,
+      mensagem: "CNM disponível"
+    });
+
+  } catch (err) {
+
+    console.error(
+      "❌ Erro ao verificar CNM:",
+      err
+    );
+
+    return res.status(500).json({
+      encontrado: false,
+      erro: "Erro ao verificar CNM"
+    });
+  }
+
+});
+
 
 // POST - Criar nova propriedade COM validação
 app.post("/propriedades", async (req, res) => {
