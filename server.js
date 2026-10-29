@@ -4692,16 +4692,19 @@ app.get("/propriedades/:id", async (req, res) => {
   }
 });
 
-// =====================================================
+
+/ =====================================================
 // GET - Consultar se CNM já existe
 // 🔒 REGRA CONDICIONAL POR CÓDIGO E CLIENTE
 //
-// codigo = "0" -> Incorporação ou loteamento
-//                Permite repetir CNM para o mesmo cliente
-//                Bloqueia se existir para outro cliente
+// codigo = "0" -> Incorporação
+// codigo = "1" -> Loteamento
+// codigo <= "1" -> Permite repetir CNM para o mesmo cliente
+//                  Bloqueia se existir para outro cliente
 //
-// codigo = "1" -> Demais situações
-//                Bloqueia se CNM já existir
+// codigo = "2" -> Matrícula individual
+// codigo = "3" -> Outro tipo
+// codigo > "1"  -> Bloqueia se CNM já existir
 // =====================================================
 
 app.get("/propriedades/verificar-cnm/:cnm", async (req, res) => {
@@ -4713,9 +4716,7 @@ app.get("/propriedades/verificar-cnm/:cnm", async (req, res) => {
     // =====================================================
 
     const cnm = String(req.params.cnm || "").trim();
-
     const codigo = String(req.query.codigo ?? "").trim();
-
     const cliente_id = String(req.query.cliente_id ?? "").trim();
 
     // =====================================================
@@ -4729,10 +4730,10 @@ app.get("/propriedades/verificar-cnm/:cnm", async (req, res) => {
       });
     }
 
-    if (codigo !== "0" && codigo !== "1") {
+    if (!["0", "1", "2", "3"].includes(codigo)) {
       return res.status(400).json({
         encontrado: false,
-        erro: 'codigo é obrigatório e deve ser "0" ou "1"'
+        erro: 'codigo é obrigatório e deve ser "0", "1", "2" ou "3"'
       });
     }
 
@@ -4749,10 +4750,11 @@ app.get("/propriedades/verificar-cnm/:cnm", async (req, res) => {
 
     let filtro;
 
-    if (codigo === "0") {
+    if (Number(codigo) <= 1) {
 
       // Incorporação ou loteamento:
-      // Procura o CNM pertencente a outro cliente.
+      // Permite repetir o CNM para o mesmo cliente.
+      // Bloqueia se o CNM existir para outro cliente.
 
       filtro = {
         cnm,
@@ -4761,8 +4763,8 @@ app.get("/propriedades/verificar-cnm/:cnm", async (req, res) => {
 
     } else {
 
-      // Demais situações:
-      // Procura o CNM independentemente do cliente.
+      // Matrícula individual ou outro tipo:
+      // Bloqueia o CNM se existir para qualquer cliente.
 
       filtro = {
         cnm
@@ -4793,7 +4795,7 @@ app.get("/propriedades/verificar-cnm/:cnm", async (req, res) => {
 
       return res.json({
         encontrado: true,
-        mensagem: codigo === "0"
+        mensagem: Number(codigo) <= 1
           ? "Este CNM já está cadastrado para outro cliente"
           : "Imóvel já cadastrado",
         data: propriedade
@@ -4807,7 +4809,7 @@ app.get("/propriedades/verificar-cnm/:cnm", async (req, res) => {
 
     return res.json({
       encontrado: false,
-      mensagem: codigo === "0"
+      mensagem: Number(codigo) <= 1
         ? "CNM disponível para este cliente"
         : "CNM disponível"
     });
@@ -4827,6 +4829,7 @@ app.get("/propriedades/verificar-cnm/:cnm", async (req, res) => {
   }
 
 });
+
 
 
 // POST - Criar nova propriedade COM validação
