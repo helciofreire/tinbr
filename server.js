@@ -4693,7 +4693,7 @@ app.get("/propriedades/:id", async (req, res) => {
 });
 
 
-/ =====================================================
+// =====================================================
 // GET - Consultar se CNM já existe
 // 🔒 REGRA CONDICIONAL POR CÓDIGO E CLIENTE
 //
