@@ -4695,16 +4695,15 @@ app.get("/propriedades/:id", async (req, res) => {
 
 // =====================================================
 // GET - Consultar se CNM já existe
-// 🔒 REGRA CONDICIONAL POR CÓDIGO E CLIENTE
+// 🔒 REGRA CONDICIONAL POR CÓDIGO, CLIENTE E TIPIFICAÇÃO
 //
-// codigo = "0" -> Incorporação
-// codigo = "1" -> Loteamento
-// codigo <= "1" -> Permite repetir CNM para o mesmo cliente
-//                  Bloqueia se existir para outro cliente
+// codigo = "0" ou "1":
+// - Permite repetir CNM para o mesmo cliente.
+// - Exige que a tipificacao existente seja igual à recebida.
+// - Bloqueia se existir para outro cliente.
 //
-// codigo = "2" -> Matrícula individual
-// codigo = "3" -> Outro tipo
-// codigo > "1"  -> Bloqueia se CNM já existir
+// codigo = "2" ou "3":
+// - Bloqueia se CNM já existir para qualquer cliente.
 // =====================================================
 
 app.get("/propriedades/verificar-cnm/:cnm", async (req, res) => {
@@ -4753,12 +4752,21 @@ app.get("/propriedades/verificar-cnm/:cnm", async (req, res) => {
     if (Number(codigo) <= 1) {
 
       // Incorporação ou loteamento:
-      // Permite repetir o CNM para o mesmo cliente.
-      // Bloqueia se o CNM existir para outro cliente.
+      // Primeiro procura qualquer registro do mesmo CNM
+      // que pertença a outro cliente OU tenha tipificação
+      // diferente para o mesmo cliente.
 
       filtro = {
         cnm,
-        cliente_id: { $ne: cliente_id }
+        $or: [
+          {
+            cliente_id: { $ne: cliente_id }
+          },
+          {
+            cliente_id,
+            tipificacao: { $ne: Number(codigo) }
+          }
+        ]
       };
 
     } else {
@@ -4782,7 +4790,8 @@ app.get("/propriedades/verificar-cnm/:cnm", async (req, res) => {
         projection: {
           _id: 1,
           cnm: 1,
-          cliente_id: 1
+          cliente_id: 1,
+          tipificacao: 1
         }
       }
     );
@@ -4793,11 +4802,29 @@ app.get("/propriedades/verificar-cnm/:cnm", async (req, res) => {
 
     if (propriedade) {
 
+      let mensagem;
+
+      if (Number(codigo) <= 1) {
+
+        if (propriedade.cliente_id !== cliente_id) {
+
+          mensagem = "Este CNM já está cadastrado para outro cliente";
+
+        } else {
+
+          mensagem = "Este CNM já está cadastrado com outra tipificação para este cliente";
+
+        }
+
+      } else {
+
+        mensagem = "Imóvel já cadastrado";
+
+      }
+
       return res.json({
         encontrado: true,
-        mensagem: Number(codigo) <= 1
-          ? "Este CNM já está cadastrado para outro cliente"
-          : "Imóvel já cadastrado",
+        mensagem,
         data: propriedade
       });
 
@@ -4810,7 +4837,7 @@ app.get("/propriedades/verificar-cnm/:cnm", async (req, res) => {
     return res.json({
       encontrado: false,
       mensagem: Number(codigo) <= 1
-        ? "CNM disponível para este cliente"
+        ? "CNM disponível para este cliente e tipificação"
         : "CNM disponível"
     });
 
