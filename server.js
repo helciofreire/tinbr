@@ -4693,6 +4693,7 @@ app.get("/propriedades/:id", async (req, res) => {
 });
 
 
+
 // =====================================================
 // GET - Consultar se CNM já existe
 //
@@ -4700,10 +4701,14 @@ app.get("/propriedades/:id", async (req, res) => {
 // - Permite repetir para o mesmo cliente.
 // - Exige mesma tipificacao.
 // - Bloqueia outro cliente.
-// - Se permitido, retorna o primeiro imóvel em data.
+// - Se permitido, retorna o primeiro imóvel completo em data.
 //
 // codigo = 2 ou 3:
 // - Bloqueia se CNM existir para qualquer cliente.
+//
+// RETORNO:
+// - data contém todos os campos do primeiro documento.
+// - bloqueio contém todos os campos do documento que bloqueou.
 // =====================================================
 
 app.get("/propriedades/verificar-cnm/:cnm", async (req, res) => {
@@ -4720,6 +4725,7 @@ app.get("/propriedades/verificar-cnm/:cnm", async (req, res) => {
 
     const cliente_id = String(req.query.cliente_id ?? "").trim();
 
+
     // =====================================================
     // 2. VALIDA OS PARÂMETROS
     // =====================================================
@@ -4727,60 +4733,68 @@ app.get("/propriedades/verificar-cnm/:cnm", async (req, res) => {
     if (!cnm) {
 
       return res.status(400).json({
+
         encontrado: false,
+
         permitido: false,
+
+        repetido: false,
+
         erro: "cnm é obrigatório"
+
       });
 
     }
+
 
     if (!["0", "1", "2", "3"].includes(codigo)) {
 
       return res.status(400).json({
+
         encontrado: false,
+
         permitido: false,
+
+        repetido: false,
+
         erro: 'codigo deve ser "0", "1", "2" ou "3"'
+
       });
 
     }
+
 
     if (!cliente_id) {
 
       return res.status(400).json({
+
         encontrado: false,
+
         permitido: false,
+
+        repetido: false,
+
         erro: "cliente_id é obrigatório"
+
       });
 
     }
 
-    // =====================================================
-    // 3. PROJECTION DOS DADOS DO PRIMEIRO IMÓVEL
-    // =====================================================
-
-    const projection = {
-      _id: 1,
-      codigo: 1,
-      cnm: 1,
-      cliente_id: 1,
-      tipificacao: 1
-    };
 
     // =====================================================
-    // 4. CONSULTA O PRIMEIRO REGISTRO DO CNM
+    // 3. CONSULTA O PRIMEIRO REGISTRO DO CNM
+    // RETORNA TODOS OS CAMPOS DO DOCUMENTO
     // =====================================================
 
-    const primeiraPropriedade = await db.collection("propriedades").findOne(
-      {
-        cnm
-      },
-      {
-        projection
-      }
-    );
+    const primeiraPropriedade = await db.collection("propriedades").findOne({
+
+      cnm
+
+    });
+
 
     // =====================================================
-    // 5. CNM NÃO EXISTE
+    // 4. CNM NÃO EXISTE
     // =====================================================
 
     if (!primeiraPropriedade) {
@@ -4795,62 +4809,82 @@ app.get("/propriedades/verificar-cnm/:cnm", async (req, res) => {
 
         mensagem: "CNM disponível",
 
-        data: null
+        data: null,
+
+        bloqueio: null
 
       });
 
     }
 
+
     // =====================================================
-    // 6. TIPIFICAÇÃO 0 OU 1
+    // 5. TIPIFICAÇÃO 0 OU 1
     // =====================================================
 
     if (Number(codigo) <= 1) {
 
-      // -----------------------------------------------------
-      // 6.1. PROCURA REGISTRO INCOMPATÍVEL
-      // -----------------------------------------------------
+
+      // =====================================================
+      // 5.1. PROCURA REGISTRO INCOMPATÍVEL
+      // =====================================================
 
       const propriedadeBloqueio = await db.collection("propriedades").findOne(
 
         {
+
           cnm,
 
           $or: [
 
-            // CNM pertencente a outro cliente
+            // -----------------------------------------------
+            // CNM PERTENCE A OUTRO CLIENTE
+            // -----------------------------------------------
+
             {
+
               cliente_id: {
+
                 $ne: cliente_id
+
               }
+
             },
 
-            // Mesmo cliente, mas tipificação diferente
+
+            // -----------------------------------------------
+            // MESMO CLIENTE, MAS TIPIFICAÇÃO DIFERENTE
+            // -----------------------------------------------
+
             {
+
               cliente_id,
 
               tipificacao: {
+
                 $ne: Number(codigo)
+
               }
+
             }
 
           ]
-        },
 
-        {
-          projection
         }
 
       );
 
-      // -----------------------------------------------------
-      // 6.2. EXISTE REGISTRO INCOMPATÍVEL
-      // -----------------------------------------------------
+
+      // =====================================================
+      // 5.2. EXISTE REGISTRO INCOMPATÍVEL
+      // =====================================================
 
       if (propriedadeBloqueio) {
 
         const outroCliente =
+
           String(propriedadeBloqueio.cliente_id) !== cliente_id;
+
 
         return res.json({
 
@@ -4874,9 +4908,10 @@ app.get("/propriedades/verificar-cnm/:cnm", async (req, res) => {
 
       }
 
-      // -----------------------------------------------------
-      // 6.3. CNM EXISTE, MAS PODE SER REUTILIZADO
-      // -----------------------------------------------------
+
+      // =====================================================
+      // 5.3. CNM EXISTE, MAS PODE SER REUTILIZADO
+      // =====================================================
 
       return res.json({
 
@@ -4888,14 +4923,17 @@ app.get("/propriedades/verificar-cnm/:cnm", async (req, res) => {
 
         mensagem: "CNM existente. Inserção permitida para este cliente e tipificação",
 
-        data: primeiraPropriedade
+        data: primeiraPropriedade,
+
+        bloqueio: null
 
       });
 
     }
 
+
     // =====================================================
-    // 7. TIPIFICAÇÃO 2 OU 3
+    // 6. TIPIFICAÇÃO 2 OU 3
     // CNM EXISTENTE BLOQUEIA
     // =====================================================
 
@@ -4909,22 +4947,35 @@ app.get("/propriedades/verificar-cnm/:cnm", async (req, res) => {
 
       mensagem: "Imóvel já cadastrado",
 
-      data: primeiraPropriedade
+      data: primeiraPropriedade,
+
+      bloqueio: primeiraPropriedade
 
     });
 
+
   } catch (err) {
 
+    // =====================================================
+    // 7. ERRO
+    // =====================================================
+
     console.error(
+
       "❌ Erro ao verificar CNM:",
+
       err
+
     );
+
 
     return res.status(500).json({
 
       encontrado: false,
 
       permitido: false,
+
+      repetido: false,
 
       erro: "Erro ao verificar CNM"
 
