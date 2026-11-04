@@ -4694,6 +4694,7 @@ app.get("/propriedades/:id", async (req, res) => {
 
 
 
+
 // =====================================================
 // GET - Consultar se CNM já existe
 //
@@ -4707,8 +4708,8 @@ app.get("/propriedades/:id", async (req, res) => {
 // - Bloqueia se CNM existir para qualquer cliente.
 //
 // RETORNO:
-// - data contém todos os campos do primeiro documento.
-// - bloqueio contém todos os campos do documento que bloqueou.
+// - data: documento completo SOMENTE quando permitido.
+// - bloqueio: identificação do registro que bloqueou.
 // =====================================================
 
 app.get("/propriedades/verificar-cnm/:cnm", async (req, res) => {
@@ -4733,15 +4734,10 @@ app.get("/propriedades/verificar-cnm/:cnm", async (req, res) => {
     if (!cnm) {
 
       return res.status(400).json({
-
         encontrado: false,
-
         permitido: false,
-
         repetido: false,
-
         erro: "cnm é obrigatório"
-
       });
 
     }
@@ -4750,15 +4746,10 @@ app.get("/propriedades/verificar-cnm/:cnm", async (req, res) => {
     if (!["0", "1", "2", "3"].includes(codigo)) {
 
       return res.status(400).json({
-
         encontrado: false,
-
         permitido: false,
-
         repetido: false,
-
         erro: 'codigo deve ser "0", "1", "2" ou "3"'
-
       });
 
     }
@@ -4767,15 +4758,10 @@ app.get("/propriedades/verificar-cnm/:cnm", async (req, res) => {
     if (!cliente_id) {
 
       return res.status(400).json({
-
         encontrado: false,
-
         permitido: false,
-
         repetido: false,
-
         erro: "cliente_id é obrigatório"
-
       });
 
     }
@@ -4783,13 +4769,10 @@ app.get("/propriedades/verificar-cnm/:cnm", async (req, res) => {
 
     // =====================================================
     // 3. CONSULTA O PRIMEIRO REGISTRO DO CNM
-    // RETORNA TODOS OS CAMPOS DO DOCUMENTO
     // =====================================================
 
     const primeiraPropriedade = await db.collection("propriedades").findOne({
-
       cnm
-
     });
 
 
@@ -4800,19 +4783,12 @@ app.get("/propriedades/verificar-cnm/:cnm", async (req, res) => {
     if (!primeiraPropriedade) {
 
       return res.json({
-
         encontrado: false,
-
         permitido: true,
-
         repetido: false,
-
         mensagem: "CNM disponível",
-
         data: null,
-
         bloqueio: null
-
       });
 
     }
@@ -4824,67 +4800,47 @@ app.get("/propriedades/verificar-cnm/:cnm", async (req, res) => {
 
     if (Number(codigo) <= 1) {
 
-
       // =====================================================
       // 5.1. PROCURA REGISTRO INCOMPATÍVEL
       // =====================================================
 
-      const propriedadeBloqueio = await db.collection("propriedades").findOne(
+      const propriedadeBloqueio = await db.collection("propriedades").findOne({
 
-        {
+        cnm,
 
-          cnm,
+        $or: [
 
-          $or: [
+          // CNM PERTENCE A OUTRO CLIENTE
 
-            // -----------------------------------------------
-            // CNM PERTENCE A OUTRO CLIENTE
-            // -----------------------------------------------
-
-            {
-
-              cliente_id: {
-
-                $ne: cliente_id
-
-              }
-
-            },
-
-
-            // -----------------------------------------------
-            // MESMO CLIENTE, MAS TIPIFICAÇÃO DIFERENTE
-            // -----------------------------------------------
-
-            {
-
-              cliente_id,
-
-              tipificacao: {
-
-                $ne: Number(codigo)
-
-              }
-
+          {
+            cliente_id: {
+              $ne: cliente_id
             }
+          },
 
-          ]
+          // MESMO CLIENTE, MAS TIPIFICAÇÃO DIFERENTE
 
-        }
+          {
+            cliente_id,
+            tipificacao: {
+              $ne: Number(codigo)
+            }
+          }
 
-      );
+        ]
+
+      });
 
 
       // =====================================================
       // 5.2. EXISTE REGISTRO INCOMPATÍVEL
+      // NÃO RETORNA O JSON COMPLETO
       // =====================================================
 
       if (propriedadeBloqueio) {
 
         const outroCliente =
-
           String(propriedadeBloqueio.cliente_id) !== cliente_id;
-
 
         return res.json({
 
@@ -4895,14 +4851,17 @@ app.get("/propriedades/verificar-cnm/:cnm", async (req, res) => {
           repetido: true,
 
           mensagem: outroCliente
-
             ? "Este CNM já está cadastrado para outro cliente"
-
             : "Este CNM já está cadastrado com outra tipificação para este cliente",
 
-          data: primeiraPropriedade,
+          data: null,
 
-          bloqueio: propriedadeBloqueio
+          bloqueio: {
+            _id: propriedadeBloqueio._id,
+            cnm: propriedadeBloqueio.cnm,
+            cliente_id: propriedadeBloqueio.cliente_id,
+            tipificacao: propriedadeBloqueio.tipificacao
+          }
 
         });
 
@@ -4911,6 +4870,7 @@ app.get("/propriedades/verificar-cnm/:cnm", async (req, res) => {
 
       // =====================================================
       // 5.3. CNM EXISTE, MAS PODE SER REUTILIZADO
+      // RETORNA O DOCUMENTO COMPLETO
       // =====================================================
 
       return res.json({
@@ -4935,6 +4895,7 @@ app.get("/propriedades/verificar-cnm/:cnm", async (req, res) => {
     // =====================================================
     // 6. TIPIFICAÇÃO 2 OU 3
     // CNM EXISTENTE BLOQUEIA
+    // NÃO RETORNA O JSON COMPLETO
     // =====================================================
 
     return res.json({
@@ -4947,9 +4908,14 @@ app.get("/propriedades/verificar-cnm/:cnm", async (req, res) => {
 
       mensagem: "Imóvel já cadastrado",
 
-      data: primeiraPropriedade,
+      data: null,
 
-      bloqueio: primeiraPropriedade
+      bloqueio: {
+        _id: primeiraPropriedade._id,
+        cnm: primeiraPropriedade.cnm,
+        cliente_id: primeiraPropriedade.cliente_id,
+        tipificacao: primeiraPropriedade.tipificacao
+      }
 
     });
 
@@ -4960,14 +4926,7 @@ app.get("/propriedades/verificar-cnm/:cnm", async (req, res) => {
     // 7. ERRO
     // =====================================================
 
-    console.error(
-
-      "❌ Erro ao verificar CNM:",
-
-      err
-
-    );
-
+    console.error("❌ Erro ao verificar CNM:", err);
 
     return res.status(500).json({
 
