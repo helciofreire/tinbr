@@ -5026,6 +5026,84 @@ app.post("/propriedades", async (req, res) => {
   }
 });
 
+// =====================================================
+// VERIFICAR DUPLICIDADE DE UNIDADE
+// Mesmo CNM + Bloco + Pavimento
+// =====================================================
+
+app.post("/propriedades/verificar-unidade", async (req, res) => {
+    try {
+        const { cnm, blq, pavimento } = req.body;
+
+        console.log("================================");
+        console.log("🔎 VERIFICAR DUPLICIDADE UNIDADE");
+        console.log("CNM:", cnm);
+        console.log("BLQ:", blq);
+        console.log("PAVIMENTO:", pavimento);
+        console.log("================================");
+
+        if (!cnm || blq === undefined || blq === null || pavimento === undefined || pavimento === null) {
+            return res.status(400).json({
+                sucesso: false,
+                erro: "CNM, bloco e pavimento são obrigatórios."
+            });
+        }
+
+        const cnmLimpo = String(cnm).trim();
+        const blqLimpo = String(blq).trim();
+        const pavimentoNumero = Number(pavimento);
+
+        if (!Number.isInteger(pavimentoNumero)) {
+            return res.status(400).json({
+                sucesso: false,
+                erro: "O pavimento deve ser um número inteiro."
+            });
+        }
+
+        const db = client.db(process.env.MONGO_DB);
+
+        const duplicidade = await db.collection("propriedades").findOne({
+            cnm: cnmLimpo,
+            blq: blqLimpo,
+            pavimento: pavimentoNumero
+        });
+
+        if (duplicidade) {
+            console.log("❌ UNIDADE JÁ CADASTRADA:", duplicidade._id);
+
+            return res.status(200).json({
+                sucesso: true,
+                encontrado: true,
+                permitido: false,
+                mensagem: "Unidade já cadastrada.",
+                data: {
+                    propriedade_id: duplicidade._id,
+                    cnm: duplicidade.cnm,
+                    blq: duplicidade.blq,
+                    pavimento: duplicidade.pavimento
+                }
+            });
+        }
+
+        console.log("✅ UNIDADE DISPONÍVEL");
+
+        return res.status(200).json({
+            sucesso: true,
+            encontrado: false,
+            permitido: true,
+            mensagem: ""
+        });
+
+    } catch (erro) {
+        console.error("❌ ERRO AO VERIFICAR UNIDADE:", erro);
+
+        return res.status(500).json({
+            sucesso: false,
+            erro: "Erro interno ao verificar duplicidade da unidade."
+        });
+    }
+});
+
 // PUT - Atualizar propriedades COM verificação de cliente
 app.put("/propriedades/:id", async (req, res) => {
   try {
