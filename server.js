@@ -4693,15 +4693,15 @@ app.get("/propriedades/:id", async (req, res) => {
 });
 
 
-
-
 // =====================================================
 // GET - Consultar se CNM já existe
 //
 // codigo = 0 ou 1:
 // - Permite repetir para o mesmo cliente.
 // - Exige mesma tipificacao.
+// - Exige mesmo proprietario_id.
 // - Bloqueia outro cliente.
+// - Bloqueia outro proprietário.
 // - Se permitido, retorna o primeiro imóvel completo em data.
 //
 // codigo = 2 ou 3:
@@ -4714,237 +4714,515 @@ app.get("/propriedades/:id", async (req, res) => {
 
 app.get("/propriedades/verificar-cnm/:cnm", async (req, res) => {
 
-  try {
+    try {
 
-    // =====================================================
-    // 1. RECEBE E NORMALIZA OS PARÂMETROS
-    // =====================================================
+        // =====================================================
+        // 1. RECEBE E NORMALIZA OS PARÂMETROS
+        // =====================================================
 
-    const cnm = String(req.params.cnm || "").trim();
+        const cnm = String(req.params.cnm || "").trim();
 
-    const codigo = String(req.query.codigo ?? "").trim();
+        const codigo = String(req.query.codigo ?? "").trim();
 
-    const cliente_id = String(req.query.cliente_id ?? "").trim();
+        const cliente_id = String(req.query.cliente_id ?? "").trim();
 
-
-    // =====================================================
-    // 2. VALIDA OS PARÂMETROS
-    // =====================================================
-
-    if (!cnm) {
-
-      return res.status(400).json({
-        encontrado: false,
-        permitido: false,
-        repetido: false,
-        erro: "cnm é obrigatório"
-      });
-
-    }
+        const proprietario_id = String(
+            req.query.proprietario_id ?? ""
+        ).trim();
 
 
-    if (!["0", "1", "2", "3"].includes(codigo)) {
-
-      return res.status(400).json({
-        encontrado: false,
-        permitido: false,
-        repetido: false,
-        erro: 'codigo deve ser "0", "1", "2" ou "3"'
-      });
-
-    }
+        console.log("================================");
+        console.log("🔎 VERIFICAR CNM");
+        console.log("CNM:", cnm);
+        console.log("CODIGO:", codigo);
+        console.log("CLIENTE_ID:", cliente_id);
+        console.log("PROPRIETARIO_ID:", proprietario_id);
+        console.log("================================");
 
 
-    if (!cliente_id) {
+        // =====================================================
+        // 2. VALIDA CNM
+        // =====================================================
 
-      return res.status(400).json({
-        encontrado: false,
-        permitido: false,
-        repetido: false,
-        erro: "cliente_id é obrigatório"
-      });
+        if (!cnm) {
 
-    }
+            return res.status(400).json({
 
+                encontrado: false,
 
-    // =====================================================
-    // 3. CONSULTA O PRIMEIRO REGISTRO DO CNM
-    // =====================================================
+                permitido: false,
 
-    const primeiraPropriedade = await db.collection("propriedades").findOne({
-      cnm
-    });
+                repetido: false,
 
+                erro: "cnm é obrigatório"
 
-    // =====================================================
-    // 4. CNM NÃO EXISTE
-    // =====================================================
+            });
 
-    if (!primeiraPropriedade) {
-
-      return res.json({
-        encontrado: false,
-        permitido: true,
-        repetido: false,
-        mensagem: "CNM disponível",
-        data: null,
-        bloqueio: null
-      });
-
-    }
+        }
 
 
-    // =====================================================
-    // 5. TIPIFICAÇÃO 0 OU 1
-    // =====================================================
+        // =====================================================
+        // 3. VALIDA CÓDIGO
+        // =====================================================
 
-    if (Number(codigo) <= 1) {
+        if (!["0", "1", "2", "3"].includes(codigo)) {
 
-      // =====================================================
-      // 5.1. PROCURA REGISTRO INCOMPATÍVEL
-      // =====================================================
+            return res.status(400).json({
 
-      const propriedadeBloqueio = await db.collection("propriedades").findOne({
+                encontrado: false,
 
-        cnm,
+                permitido: false,
 
-        $or: [
+                repetido: false,
 
-          // CNM PERTENCE A OUTRO CLIENTE
+                erro: 'codigo deve ser "0", "1", "2" ou "3"'
 
-          {
-            cliente_id: {
-              $ne: cliente_id
+            });
+
+        }
+
+
+        // =====================================================
+        // 4. VALIDA CLIENTE
+        // =====================================================
+
+        if (!cliente_id) {
+
+            return res.status(400).json({
+
+                encontrado: false,
+
+                permitido: false,
+
+                repetido: false,
+
+                erro: "cliente_id é obrigatório"
+
+            });
+
+        }
+
+
+        // =====================================================
+        // 5. VALIDA PROPRIETÁRIO
+        // =====================================================
+
+        if (!proprietario_id) {
+
+            return res.status(400).json({
+
+                encontrado: false,
+
+                permitido: false,
+
+                repetido: false,
+
+                erro: "proprietario_id é obrigatório"
+
+            });
+
+        }
+
+
+        // =====================================================
+        // 6. CONSULTA O PRIMEIRO REGISTRO DO CNM
+        // =====================================================
+
+        const primeiraPropriedade = await db
+            .collection("propriedades")
+            .findOne({
+
+                cnm
+
+            });
+
+
+        // =====================================================
+        // 7. CNM NÃO EXISTE
+        // =====================================================
+
+        if (!primeiraPropriedade) {
+
+            console.log("✅ CNM NÃO EXISTE");
+
+            return res.json({
+
+                encontrado: false,
+
+                permitido: true,
+
+                repetido: false,
+
+                mensagem: "CNM disponível",
+
+                data: null,
+
+                bloqueio: null
+
+            });
+
+        }
+
+
+        // =====================================================
+        // 8. TIPIFICAÇÃO 0 OU 1
+        // =====================================================
+
+        if (Number(codigo) <= 1) {
+
+
+            // =====================================================
+            // 8.1. PROCURA REGISTRO INCOMPATÍVEL
+            //
+            // BLOQUEIA:
+            // - OUTRO CLIENTE
+            // - OUTRO PROPRIETÁRIO
+            // - OUTRA TIPIFICAÇÃO
+            // =====================================================
+
+            const propriedadeBloqueio = await db
+                .collection("propriedades")
+                .findOne({
+
+                    cnm,
+
+                    $or: [
+
+                        // -----------------------------------------
+                        // CNM PERTENCE A OUTRO CLIENTE
+                        // -----------------------------------------
+
+                        {
+
+                            cliente_id: {
+
+                                $ne: cliente_id
+
+                            }
+
+                        },
+
+
+                        // -----------------------------------------
+                        // CNM PERTENCE A OUTRO PROPRIETÁRIO
+                        // -----------------------------------------
+
+                        {
+
+                            proprietario_id: {
+
+                                $ne: proprietario_id
+
+                            }
+
+                        },
+
+
+                        // -----------------------------------------
+                        // MESMO CLIENTE, TIPIFICAÇÃO DIFERENTE
+                        // -----------------------------------------
+
+                        {
+
+                            cliente_id,
+
+                            tipificacao: {
+
+                                $ne: Number(codigo)
+
+                            }
+
+                        }
+
+                    ]
+
+                });
+
+
+            // =====================================================
+            // 8.2. EXISTE REGISTRO INCOMPATÍVEL
+            // =====================================================
+
+            if (propriedadeBloqueio) {
+
+
+                // -----------------------------------------------
+                // IDENTIFICA O MOTIVO DO BLOQUEIO
+                // -----------------------------------------------
+
+                const outroCliente =
+                    String(propriedadeBloqueio.cliente_id) !==
+                    cliente_id;
+
+
+                const outroProprietario =
+                    String(propriedadeBloqueio.proprietario_id) !==
+                    proprietario_id;
+
+
+                const outraTipificacao =
+                    Number(propriedadeBloqueio.tipificacao) !==
+                    Number(codigo);
+
+
+                let mensagemBloqueio =
+                    "CNM não permitido.";
+
+
+                // -----------------------------------------------
+                // PRIORIDADE DO MOTIVO
+                // -----------------------------------------------
+
+                if (outroCliente) {
+
+                    mensagemBloqueio =
+                        "Este CNM já está cadastrado para outro cliente.";
+
+                } else if (outroProprietario) {
+
+                    mensagemBloqueio =
+                        "Este CNM já está cadastrado para outro proprietário.";
+
+                } else if (outraTipificacao) {
+
+                    mensagemBloqueio =
+                        "Este CNM já está cadastrado com outra tipificação para este cliente.";
+
+                }
+
+
+                console.log("================================");
+                console.log("❌ CNM BLOQUEADO");
+                console.log("MOTIVO:", mensagemBloqueio);
+                console.log("REGISTRO:", propriedadeBloqueio._id);
+                console.log("CLIENTE EXISTENTE:", propriedadeBloqueio.cliente_id);
+                console.log("PROPRIETÁRIO EXISTENTE:", propriedadeBloqueio.proprietario_id);
+                console.log("TIPIFICAÇÃO EXISTENTE:", propriedadeBloqueio.tipificacao);
+                console.log("================================");
+
+
+                // -----------------------------------------------
+                // RETORNA BLOQUEIO
+                // -----------------------------------------------
+
+                return res.json({
+
+                    encontrado: true,
+
+                    permitido: false,
+
+                    repetido: true,
+
+                    mensagem: mensagemBloqueio,
+
+                    data: null,
+
+                    bloqueio: {
+
+                        _id: propriedadeBloqueio._id,
+
+                        cnm: propriedadeBloqueio.cnm,
+
+                        cliente_id: propriedadeBloqueio.cliente_id,
+
+                        proprietario_id:
+                            propriedadeBloqueio.proprietario_id,
+
+                        tipificacao:
+                            propriedadeBloqueio.tipificacao
+
+                    }
+
+                });
+
             }
-          },
-
-          // MESMO CLIENTE, MAS TIPIFICAÇÃO DIFERENTE
-
-          {
-            cliente_id,
-            tipificacao: {
-              $ne: Number(codigo)
-            }
-          }
-
-        ]
-
-      });
 
 
-      // =====================================================
-      // 5.2. EXISTE REGISTRO INCOMPATÍVEL
-      // NÃO RETORNA O JSON COMPLETO
-      // =====================================================
+            // =====================================================
+            // 8.3. CNM EXISTE, MAS PODE SER REUTILIZADO
+            //
+            // MESMO CLIENTE
+            // MESMO PROPRIETÁRIO
+            // MESMA TIPIFICAÇÃO
+            // =====================================================
 
-      if (propriedadeBloqueio) {
+            console.log("================================");
+            console.log("✅ CNM PERMITIDO");
+            console.log("MESMO CLIENTE");
+            console.log("MESMO PROPRIETÁRIO");
+            console.log("MESMA TIPIFICAÇÃO");
+            console.log("================================");
 
-        const outroCliente =
-          String(propriedadeBloqueio.cliente_id) !== cliente_id;
+
+            return res.json({
+
+                encontrado: false,
+
+                permitido: true,
+
+                repetido: true,
+
+                mensagem:
+                    "CNM existente. Inserção permitida para este cliente, proprietário e tipificação.",
+
+                data: primeiraPropriedade,
+
+                bloqueio: null
+
+            });
+
+        }
+
+
+        // =====================================================
+        // 9. TIPIFICAÇÃO 2 OU 3
+        //
+        // CNM EXISTENTE BLOQUEIA
+        // =====================================================
+
+        console.log("================================");
+        console.log("❌ CNM BLOQUEADO");
+        console.log("TIPIFICAÇÃO 2 OU 3");
+        console.log("CNM JÁ EXISTE");
+        console.log("================================");
+
 
         return res.json({
 
-          encontrado: true,
+            encontrado: true,
 
-          permitido: false,
+            permitido: false,
 
-          repetido: true,
+            repetido: true,
 
-          mensagem: outroCliente
-            ? "Este CNM já está cadastrado para outro cliente"
-            : "Este CNM já está cadastrado com outra tipificação para este cliente",
+            mensagem: "Imóvel já cadastrado",
 
-          data: null,
+            data: null,
 
-          bloqueio: {
-            _id: propriedadeBloqueio._id,
-            cnm: propriedadeBloqueio.cnm,
-            cliente_id: propriedadeBloqueio.cliente_id,
-            tipificacao: propriedadeBloqueio.tipificacao
-          }
+            bloqueio: {
+
+                _id: primeiraPropriedade._id,
+
+                cnm: primeiraPropriedade.cnm,
+
+                cliente_id: primeiraPropriedade.cliente_id,
+
+                proprietario_id:
+                    primeiraPropriedade.proprietario_id,
+
+                tipificacao:
+                    primeiraPropriedade.tipificacao
+
+            }
 
         });
 
-      }
+
+    } catch (err) {
+
+        // =====================================================
+        // 10. ERRO
+        // =====================================================
+
+        console.error(
+            "❌ Erro ao verificar CNM:",
+            err
+        );
 
 
-      // =====================================================
-      // 5.3. CNM EXISTE, MAS PODE SER REUTILIZADO
-      // RETORNA O DOCUMENTO COMPLETO
-      // =====================================================
+        return res.status(500).json({
 
-      return res.json({
+            encontrado: false,
 
-        encontrado: false,
+            permitido: false,
 
-        permitido: true,
+            repetido: false,
 
-        repetido: true,
+            erro: "Erro ao verificar CNM"
 
-        mensagem: "CNM existente. Inserção permitida para este cliente e tipificação",
-
-        data: primeiraPropriedade,
-
-        bloqueio: null
-
-      });
+        });
 
     }
 
-
-    // =====================================================
-    // 6. TIPIFICAÇÃO 2 OU 3
-    // CNM EXISTENTE BLOQUEIA
-    // NÃO RETORNA O JSON COMPLETO
-    // =====================================================
-
-    return res.json({
-
-      encontrado: true,
-
-      permitido: false,
-
-      repetido: true,
-
-      mensagem: "Imóvel já cadastrado",
-
-      data: null,
-
-      bloqueio: {
-        _id: primeiraPropriedade._id,
-        cnm: primeiraPropriedade.cnm,
-        cliente_id: primeiraPropriedade.cliente_id,
-        tipificacao: primeiraPropriedade.tipificacao
-      }
-
-    });
-
-
-  } catch (err) {
-
-    // =====================================================
-    // 7. ERRO
-    // =====================================================
-
-    console.error("❌ Erro ao verificar CNM:", err);
-
-    return res.status(500).json({
-
-      encontrado: false,
-
-      permitido: false,
-
-      repetido: false,
-
-      erro: "Erro ao verificar CNM"
-
-    });
-
-  }
-
 });
 
+// =====================================================
+// VERIFICAR DUPLICIDADE DE UNIDADE
+// Mesmo CNM + Bloco + Pavimento
+// =====================================================
 
+app.post("/propriedades/verificar-unidade", async (req, res) => {
+    try {
+        const { cnm, blq, pavimento } = req.body;
+
+        console.log("================================");
+        console.log("🔎 VERIFICAR DUPLICIDADE UNIDADE");
+        console.log("CNM:", cnm);
+        console.log("BLQ:", blq);
+        console.log("PAVIMENTO:", pavimento);
+        console.log("================================");
+
+        if (!cnm || blq === undefined || blq === null || pavimento === undefined || pavimento === null) {
+            return res.status(400).json({
+                sucesso: false,
+                erro: "CNM, bloco e pavimento são obrigatórios."
+            });
+        }
+
+        const cnmLimpo = String(cnm).trim();
+        const blqLimpo = String(blq).trim();
+        const pavimentoNumero = Number(pavimento);
+
+        if (!Number.isInteger(pavimentoNumero)) {
+            return res.status(400).json({
+                sucesso: false,
+                erro: "O pavimento deve ser um número inteiro."
+            });
+        }
+
+        const db = client.db(process.env.MONGO_DB);
+
+        const duplicidade = await db.collection("propriedades").findOne({
+            cnm: cnmLimpo,
+            blq: blqLimpo,
+            pavimento: pavimentoNumero
+        });
+
+        if (duplicidade) {
+            console.log("❌ UNIDADE JÁ CADASTRADA:", duplicidade._id);
+
+            return res.status(200).json({
+                sucesso: true,
+                encontrado: true,
+                permitido: false,
+                mensagem: "Unidade já cadastrada.",
+                data: {
+                    propriedade_id: duplicidade._id,
+                    cnm: duplicidade.cnm,
+                    blq: duplicidade.blq,
+                    pavimento: duplicidade.pavimento
+                }
+            });
+        }
+
+        console.log("✅ UNIDADE DISPONÍVEL");
+
+        return res.status(200).json({
+            sucesso: true,
+            encontrado: false,
+            permitido: true,
+            mensagem: ""
+        });
+
+    } catch (erro) {
+        console.error("❌ ERRO AO VERIFICAR UNIDADE:", erro);
+
+        return res.status(500).json({
+            sucesso: false,
+            erro: "Erro interno ao verificar duplicidade da unidade."
+        });
+    }
+});
 
 // POST - Criar nova propriedade COM validação
 app.post("/propriedades", async (req, res) => {
@@ -5026,83 +5304,7 @@ app.post("/propriedades", async (req, res) => {
   }
 });
 
-// =====================================================
-// VERIFICAR DUPLICIDADE DE UNIDADE
-// Mesmo CNM + Bloco + Pavimento
-// =====================================================
 
-app.post("/propriedades/verificar-unidade", async (req, res) => {
-    try {
-        const { cnm, blq, pavimento } = req.body;
-
-        console.log("================================");
-        console.log("🔎 VERIFICAR DUPLICIDADE UNIDADE");
-        console.log("CNM:", cnm);
-        console.log("BLQ:", blq);
-        console.log("PAVIMENTO:", pavimento);
-        console.log("================================");
-
-        if (!cnm || blq === undefined || blq === null || pavimento === undefined || pavimento === null) {
-            return res.status(400).json({
-                sucesso: false,
-                erro: "CNM, bloco e pavimento são obrigatórios."
-            });
-        }
-
-        const cnmLimpo = String(cnm).trim();
-        const blqLimpo = String(blq).trim();
-        const pavimentoNumero = Number(pavimento);
-
-        if (!Number.isInteger(pavimentoNumero)) {
-            return res.status(400).json({
-                sucesso: false,
-                erro: "O pavimento deve ser um número inteiro."
-            });
-        }
-
-        const db = client.db(process.env.MONGO_DB);
-
-        const duplicidade = await db.collection("propriedades").findOne({
-            cnm: cnmLimpo,
-            blq: blqLimpo,
-            pavimento: pavimentoNumero
-        });
-
-        if (duplicidade) {
-            console.log("❌ UNIDADE JÁ CADASTRADA:", duplicidade._id);
-
-            return res.status(200).json({
-                sucesso: true,
-                encontrado: true,
-                permitido: false,
-                mensagem: "Unidade já cadastrada.",
-                data: {
-                    propriedade_id: duplicidade._id,
-                    cnm: duplicidade.cnm,
-                    blq: duplicidade.blq,
-                    pavimento: duplicidade.pavimento
-                }
-            });
-        }
-
-        console.log("✅ UNIDADE DISPONÍVEL");
-
-        return res.status(200).json({
-            sucesso: true,
-            encontrado: false,
-            permitido: true,
-            mensagem: ""
-        });
-
-    } catch (erro) {
-        console.error("❌ ERRO AO VERIFICAR UNIDADE:", erro);
-
-        return res.status(500).json({
-            sucesso: false,
-            erro: "Erro interno ao verificar duplicidade da unidade."
-        });
-    }
-});
 
 // PUT - Atualizar propriedades COM verificação de cliente
 app.put("/propriedades/:id", async (req, res) => {
