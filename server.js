@@ -5153,30 +5153,30 @@ app.get("/propriedades/verificar-cnm/:cnm", async (req, res) => {
 
 app.post("/propriedades/verificar-unidade", async (req, res) => {
     try {
-        const { cnm, blq, pavimento } = req.body;
+        const { cnm, blq, unidade } = req.body;
 
         console.log("================================");
         console.log("🔎 VERIFICAR DUPLICIDADE UNIDADE");
         console.log("CNM:", cnm);
         console.log("BLQ:", blq);
-        console.log("PAVIMENTO:", pavimento);
+        console.log("UNIDADE:", unidade);
         console.log("================================");
 
-        if (!cnm || blq === undefined || blq === null || pavimento === undefined || pavimento === null) {
+        if (!cnm || blq === undefined || blq === null || unidade === undefined || unidade === null) {
             return res.status(400).json({
                 sucesso: false,
-                erro: "CNM, bloco e pavimento são obrigatórios."
+                erro: "CNM, bloco e unidade são obrigatórios."
             });
         }
 
         const cnmLimpo = String(cnm).trim();
         const blqLimpo = String(blq).trim();
-        const pavimentoNumero = Number(pavimento);
+        const unidadeNumero = Number(unidade);
 
-        if (!Number.isInteger(pavimentoNumero)) {
+        if (!Number.isInteger(unidadeNumero)) {
             return res.status(400).json({
                 sucesso: false,
-                erro: "O pavimento deve ser um número inteiro."
+                erro: "A unidade deve ser um número inteiro."
             });
         }
 
@@ -5185,7 +5185,7 @@ app.post("/propriedades/verificar-unidade", async (req, res) => {
         const duplicidade = await db.collection("propriedades").findOne({
             cnm: cnmLimpo,
             blq: blqLimpo,
-            pavimento: pavimentoNumero
+            unidade: unidadeNumero
         });
 
         if (duplicidade) {
@@ -5200,7 +5200,7 @@ app.post("/propriedades/verificar-unidade", async (req, res) => {
                     propriedade_id: duplicidade._id,
                     cnm: duplicidade.cnm,
                     blq: duplicidade.blq,
-                    pavimento: duplicidade.pavimento
+                    unidade: duplicidade.unidade
                 }
             });
         }
