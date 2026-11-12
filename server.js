@@ -5224,84 +5224,164 @@ app.post("/propriedades/verificar-unidade", async (req, res) => {
     }
 });
 
-// POST - Criar nova propriedade COM validação
+// =====================================================
+// POST - Criar nova propriedade
+// =====================================================
+
 app.post("/propriedades", async (req, res) => {
-  try {
-    const dados = req.body;
 
-    // =====================================================
-    // VALIDAÇÃO DO CLIENTE
-    // =====================================================
+    try {
 
-    if (!dados.cliente_id) {
-      return res.status(400).json({
-        erro: "cliente_id é obrigatório no body"
-      });
+        const dados = req.body;
+
+        // =====================================================
+        // VALIDAÇÃO DO CLIENTE
+        // =====================================================
+
+        const cliente_id = String(dados.cliente_id || "").trim();
+
+        if (!cliente_id) {
+            return res.status(400).json({
+                erro: "cliente_id é obrigatório no body"
+            });
+        }
+
+        // =====================================================
+        // VALIDAÇÃO DO PROPRIETÁRIO
+        // =====================================================
+
+        const proprietario_id = String(dados.proprietario_id || "").trim();
+
+        if (!proprietario_id) {
+            return res.status(400).json({
+                erro: "proprietario_id é obrigatório"
+            });
+        }
+
+        // =====================================================
+        // VALIDAÇÃO DO CNM
+        // =====================================================
+
+        const cnm = String(dados.cnm || "").trim();
+
+        if (!cnm) {
+            return res.status(400).json({
+                erro: "cnm é obrigatório"
+            });
+        }
+
+        // =====================================================
+        // VALIDAÇÃO DA TIPIFICAÇÃO
+        // =====================================================
+
+        const tipificacao = Number(dados.tipificacao);
+
+        if (![0, 1, 2, 3].includes(tipificacao)) {
+            return res.status(400).json({
+                erro: "Tipificação inválida."
+            });
+        }
+
+        const colecao = db.collection("propriedades");
+
+        // =====================================================
+        // VERIFICA SE O CNM JÁ EXISTE
+        // =====================================================
+
+        const existentes = await colecao.find({
+            cnm: cnm
+        }).toArray();
+
+        console.log("================================");
+        console.log("🔎 VALIDAÇÃO POST CNM");
+        console.log("CNM:", cnm);
+        console.log("CLIENTE:", cliente_id);
+        console.log("PROPRIETÁRIO:", proprietario_id);
+        console.log("TIPIFICAÇÃO:", tipificacao);
+        console.log("REGISTROS EXISTENTES:", existentes.length);
+        console.log("================================");
+
+        if (existentes.length > 0) {
+
+            // =====================================================
+            // TIPIFICAÇÃO 0 OU 1
+            // Permite repetição dentro do mesmo cliente.
+            // Bloqueia CNM pertencente a outro cliente.
+            // =====================================================
+
+            if (tipificacao === 0 || tipificacao === 1) {
+
+                const pertenceOutroCliente = existentes.some(
+                    registro =>
+                        String(registro.cliente_id || "").trim() !== cliente_id
+                );
+
+                if (pertenceOutroCliente) {
+
+                    return res.status(400).json({
+                        erro: "Este CNM já está cadastrado para outro cliente."
+                    });
+                }
+
+                console.log("✅ CNM REPETIDO PERMITIDO PARA O MESMO CLIENTE");
+            }
+
+            // =====================================================
+            // TIPIFICAÇÃO 2 OU 3
+            // Bloqueio global
+            // =====================================================
+
+            else {
+
+                return res.status(400).json({
+                    erro: "Este CNM já está cadastrado."
+                });
+            }
+        }
+
+        // =====================================================
+        // NORMALIZA DADOS
+        // =====================================================
+
+        dados._id = String(dados._id || "").trim();
+        dados.codigo = String(dados.codigo || "").trim();
+
+        dados.cliente_id = cliente_id;
+        dados.proprietario_id = proprietario_id;
+        dados.cnm = cnm;
+        dados.tipificacao = tipificacao;
+
+        dados.criadoEm = new Date();
+        dados.atualizadoEm = new Date();
+
+        // =====================================================
+        // INSERT
+        // =====================================================
+
+        const resultado = await colecao.insertOne(dados);
+
+        console.log("✅ PROPRIEDADE INSERIDA:", resultado.insertedId);
+
+        return res.json({
+            sucesso: true,
+            _id: resultado.insertedId,
+            mensagem: "Propriedade criada com sucesso"
+        });
+
+    } catch (err) {
+
+        console.error("❌ Erro ao criar propriedade:", err);
+
+        if (err.code === 11000) {
+            return res.status(400).json({
+                erro: "Registro duplicado. Verifique os índices únicos da coleção."
+            });
+        }
+
+        return res.status(500).json({
+            erro: "Erro ao criar propriedade"
+        });
     }
-
-    // =====================================================
-    // VALIDAÇÃO DO CNM
-    // =====================================================
-
-    if (!dados.cnm) {
-      return res.status(400).json({
-        erro: "cnm é obrigatório"
-      });
-    }
-
-    // =====================================================
-    // VERIFICA SE O CNM JÁ EXISTE
-    // 🔒 GLOBAL — NÃO CONSIDERA cliente_id
-    // =====================================================
-
-    const existente = await db.collection("propriedades").findOne({
-      cnm: dados.cnm
-    });
-
-    if (existente) {
-      return res.status(400).json({
-        erro: "imóvel já cadastrado"
-      });
-    }
-
-    // =====================================================
-    // DATAS
-    // =====================================================
-
-    dados.criadoEm = new Date();
-    dados.atualizadoEm = new Date();
-
-    // =====================================================
-    // INSERT
-    // =====================================================
-
-    const resultado = await db.collection("propriedades").insertOne(dados);
-
-    return res.json({
-      sucesso: true,
-      _id: resultado.insertedId,
-      mensagem: "Propriedade criada com sucesso"
-    });
-
-  } catch (err) {
-
-    console.error("❌ Erro ao criar propriedade:", err);
-
-    // =====================================================
-    // ÍNDICE UNIQUE DO CNM
-    // Proteção contra concorrência
-    // =====================================================
-
-    if (err.code === 11000) {
-      return res.status(400).json({
-        erro: "Imóvel já cadastrado"
-      });
-    }
-
-    return res.status(500).json({
-      erro: "Erro ao criar propriedade"
-    });
-  }
 });
 
 
